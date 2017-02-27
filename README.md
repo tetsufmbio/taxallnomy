@@ -192,18 +192,20 @@ Detailed instruction for running this script can be accessed by typing:
  
     > perl get_lineage.pl -man
   
-This script uses the Perl module 'Net::Wire10' located in the folder 'lib/' that 
-accompanies this package. If you want to execute this script in  other  location, 
-install this module on your system. The easiest way to install a Perl module  is 
-using CPAN. For this, login as root user and type the command:
+This script uses the Perl modules 'Net::Wire10' and Term::InKey located in the 
+folder 'lib/' that accompanies this package. If you want to execute this script 
+in  other  location, install these modules on your system. The easiest way to 
+install a Perl module is using CPAN. For this, login as root user and type the 
+command:
 
     > cpan
   
 After entering the CPAN environment, type:
 
     cpan> install Net::Wire10
+    cpan> install Term::InKey
   
-This will install the module Net::Wire10 and its dependencies.
+This will install the module Net::Wire10, Term::InKey and their dependencies.
 
 After the module installation, leave the CPAN environment and test the script.
  
