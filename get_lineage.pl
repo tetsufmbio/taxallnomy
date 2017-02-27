@@ -459,9 +459,9 @@ This script is part of Taxallnomy database project.
 
 =head1 SYNOPSIS
 
-./get_lineage -txid 9606,9595
+perl get_lineage.pl -txid 9606,9595
 
-./get_lineage -file <txid_list_file>
+perl get_lineage.pl -file <txid_list_file>
 
 =item B<Inputs>:
 
