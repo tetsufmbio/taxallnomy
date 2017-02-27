@@ -7,12 +7,12 @@ the ranks used on Linnean classification system (e.g. Kingdom, Phylum, Class etc
 
 In this package you will find the following files/folder.
 
-    * generate_taxallnomy   - a script that will generate files for Taxallnomy 
+    * generate_taxallnomy.pl- a script that will generate files for Taxallnomy 
                               database;
-    * get_lineage           - a script that will access the Taxallnomy database 
+    * get_lineage.pl        - a script that will access the Taxallnomy database 
                               to retrieve the taxonomic lineage of TaxIDs of interest;
     * lib/                  - lib folder containing a PERL module required by the 
-                              script 'get_lineage'.
+                              script 'get_lineage.pl'.
     
 All scripts were developed to be executed in a UNIX environment.
 
@@ -20,11 +20,11 @@ All scripts were developed to be executed in a UNIX environment.
 ##  Installing database    
 
 
-The script generate_taxallnomy will generate all necessary file to load the Taxallnomy
+The script generate_taxallnomy.pl will generate all necessary file to load the Taxallnomy
 database in a local MySQL. The execution of this script requires internet  connection. 
 To run the script, just type in a UNIX terminal the following command:
 
-    > ./generate_taxallnomy
+    > perl generate_taxallnomy.pl
 
 The script will basically download the latest NCBI Taxonomy database and construct the
 Taxallnomy hierarchical structure from it. After the running, it will  generate  three 
@@ -60,7 +60,7 @@ From this table, you can query for a taxonomic rank of an organism by  its  taxo
 (primary key). Each one of 28 taxonomic ranks are represented in a column of this table. 
 Keep in mind that the content of the taxonomic rank columns is not a taxon name,  but a 
 taxon code used by Taxallnomy (See the section "Taxallnomy taxon code"). The taxon names 
-can be programmatically generated from the taxon code. Use the script "get_lineage"  to 
+can be programmatically generated from the taxon code. Use the script "get_lineage.pl"  to 
 retrieve lineages with taxon name.
 
 * taxallnomy_lin table content:
@@ -160,20 +160,20 @@ their own scientific name to name them.
 ## Retrieving taxonomic lineage
 
 
-After loading the Taxallnomy database, you can use  the  script  'get_lineage'  to 
+After loading the Taxallnomy database, you can use  the  script  'get_lineage.pl'  to 
 programatically retrieve the taxonomic lineage of TaxIDs of interest. To  test  if 
 the script is running properly on your system, type the following command:
 
-    > ./get_lineage 
+    > perl get_lineage.pl
 
 If all goes well, this will show a message like this:
 
 
     ERROR Please provide TaxIDs or a file containing a list of TaxIDs.            
     Usage:                                                                        
-       ./get_lineage -txid 9606,9595                                              
+       perl get_lineage.pl -txid 9606,9595                                              
                                                                                 
-       ./get_lineage -file <txid_list_file>                                       
+       perl get_lineage.pl -file <txid_list_file>                                       
                                                                                 
        Inputs:                                                                    
            [-txid set_of_taxids] [-file txids_list_file]                          
@@ -190,7 +190,7 @@ If all goes well, this will show a message like this:
 
 Detailed instruction for running this script can be accessed by typing:
  
-    > ./get_lineage -man
+    > perl get_lineage.pl -man
   
 This script uses the Perl module 'Net::Wire10' located in the folder 'lib/' that 
 accompanies this package. If you want to execute this script in  other  location, 
