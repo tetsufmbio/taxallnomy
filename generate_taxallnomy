@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/bin/perl -w
 
 # This script creates all files necessary to load Taxallnomy database on MySQL.
 # Be aware that  its  execution  requires  internet  connection  and  consumes
