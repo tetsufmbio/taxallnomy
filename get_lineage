@@ -39,6 +39,7 @@
 use FindBin qw($Bin);
 use lib "$Bin/lib/perl5";
 use Net::Wire10;
+use Term::InKey;
 use strict;
 use Getopt::Long;
 use Pod::Usage;
@@ -263,7 +264,7 @@ if (!exists $format_type{$format}){
 open (OUT, "> $outfile") or die "ERROR: Could not create the file \'$outfile\'.\n";
 
 # connect to the database
-use Term::ReadKey;
+#
 if(!$userid){
 	print "Type MySQL user that have access to taxallnomy database:\n";
 	chomp($userid = <STDIN>);
@@ -271,9 +272,8 @@ if(!$userid){
 
 # get password for mysql
 print "Type MySQL password for user \'$userid\':\n";
-ReadMode('noecho'); # don't echo
-chomp(my $password = <STDIN>);
-ReadMode(0);  
+my $password = &ReadPassword;	
+chomp $password;
 
 my $wire = Net::Wire10->new(
 	host     => "localhost",
