@@ -2,7 +2,7 @@
     
 ##  Introduction
 
-Taxallnomy is a taxonomic database that provides taxonomic lineages  according  to 
+Taxallnomy is a taxonomic database based on NCBI Taxonomy that provides taxonomic lineages  according  to 
 the ranks used on Linnean classification system (e.g. Kingdom, Phylum, Class etc.). 
 
 In this package you will find the following files/folder.
@@ -20,7 +20,7 @@ All scripts were developed to be executed in a UNIX environment.
 ##  Installing database    
 
 
-The script generate_taxallnomy.pl will generate all necessary file to load the Taxallnomy
+The script generate_taxallnomy.pl generates all necessary file to load the Taxallnomy
 database in a local MySQL. The execution of this script requires internet  connection. 
 To run the script, just type in a UNIX terminal the following command:
 
@@ -52,10 +52,11 @@ After the loading procedure, your MySQL should have a database called "taxallnom
 in the taxallnomy database, two tables called "taxallnomy_lin" and "taxallnomy_tree".
 
 
-###  Table descriptions
+##  Table descriptions
 
 
-1) taxallnomy_lin - this table contains all taxonomic lineages of Taxallnomy  database. 
+### 1) taxallnomy_lin
+This table contains all taxonomic lineages of Taxallnomy  database. 
 From this table, you can query for a taxonomic rank of an organism by  its  taxonomy ID 
 (primary key). Each one of 28 taxonomic ranks are represented in a column of this table. 
 Keep in mind that the content of the taxonomic rank columns is not a taxon name,  but a 
@@ -106,7 +107,8 @@ rank            | taxonomic rank of txid in the original database
 \* includes txid in unpublished/unidentified/unclassified/environmental/unassigned/
   incertae sedis/other sequences groups.
 
-2) taxallnomy_tree - this table provides the hierarchical structure of Taxallnomy database.
+### 2) taxallnomy_tree
+This table provides the hierarchical structure of Taxallnomy database.
 
 * taxallnomy_tree table content:
 
@@ -205,9 +207,9 @@ After entering the CPAN environment, type:
     cpan> install Net::Wire10
     cpan> install Term::InKey
   
-This will install the module Net::Wire10, Term::InKey and their dependencies.
+This will install the modules Net::Wire10, Term::InKey and their dependencies.
 
-After the module installation, leave the CPAN environment and test the script.
+After the module installations, leave the CPAN environment and test the script.
  
 
 ## Contact
