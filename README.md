@@ -194,7 +194,7 @@ Detailed instruction for running this script can be accessed by typing:
  
     > perl get_lineage.pl -man
   
-This script uses the Perl modules 'Net::Wire10' and Term::InKey located in the 
+This script uses the Perl modules 'Net::Wire10' and 'Term::InKey' located in the 
 folder 'lib/' that accompanies this package. If you want to execute this script 
 in  other  location, install these modules on your system. The easiest way to 
 install a Perl module is using CPAN. For this, login as root user and type the 
