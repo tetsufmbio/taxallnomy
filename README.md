@@ -137,8 +137,10 @@ This can be done in three ways:
 
   1 - (type 1) This taxon is originally unranked on NCBI Taxonomy tree and it was 
       ranked by Taxallnomy algorithm. 
+      
   2 - (type 2) This taxon was created by Taxallnomy algorithm and the name of one 
       of its descendant taxon was used to name it.
+      
   3 - (type 3) This taxon was created by Taxallnomy algorithm and the name of one 
       of its ascendant taxon was used to name it. 
 
