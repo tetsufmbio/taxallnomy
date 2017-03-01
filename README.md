@@ -7,9 +7,9 @@ the ranks used on Linnean classification system (e.g. Kingdom, Phylum, Class etc
 
 In this package you will find the following files/folder.
 
-    * generate_taxallnomy.pl- a script that will generate files for Taxallnomy 
+    * generate_taxallnomy.pl- a script that generates files for Taxallnomy 
                               database;
-    * get_lineage.pl        - a script that will access the Taxallnomy database 
+    * get_lineage.pl        - a script that accesses the Taxallnomy database 
                               to retrieve the taxonomic lineage of TaxIDs of interest;
     * lib/                  - lib folder containing a PERL module required by the 
                               script 'get_lineage.pl'.
