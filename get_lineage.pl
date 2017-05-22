@@ -58,6 +58,7 @@ my $help = 0;
 my $man	= 0;
 my $database = "taxallnomy";
 my $table = "taxallnomy_lin";
+my $rankTable = "taxallnomy_rank";
 
 GetOptions(
     'txid=s'	=> \$txid,
@@ -70,6 +71,7 @@ GetOptions(
 	'out=s'		=> \$outfile,
 	'database=s'=> \$database,
 	'table=s'	=> \$table,
+	'rankTable=s'	=> \$rankTable,
 	'help!'		=> \$help,
 	'man!'		=> \$man,
 ) or pod2usage(-verbose => 99, 
@@ -77,100 +79,6 @@ GetOptions(
 
 pod2usage(0) if $man;
 pod2usage(2) if $help;
-
-my %ncbi_all_ranks = (
-	"no rank" => -1,
-	"superkingdom" => 0,
-	"kingdom" => 1,
-	"subkingdom" => 2,
-	"superphylum" => 3,
-	"phylum" => 4,
-	"subphylum" => 5,
-	"superclass" => 6,
-	"class" => 7,
-	"subclass" => 8,
-	"infraclass" => 9,
-	"superorder" => 10,
-	"order" => 11,
-	"suborder" => 12,
-	"infraorder" => 13,
-	"parvorder" => 14,
-	"superfamily" => 15,
-	"family" => 16,	
-	"subfamily" => 17,
-	"tribe" => 18,
-	"subtribe" => 19,
-	"genus" => 20,	
-	"subgenus" => 21,
-	"species_group" => 22,	
-	"species_subgroup" => 23,
-	"species" => 24,
-	"subspecies" => 25,
-	"varietas" => 26,
-	"forma" => 27
-);
-
-my %taxAllnomy_ranks_code = (
-	"01" 	=> "spk_",
-	"02"	=> "kin_",
-	"03"	=> "sbk_",
-	"04" 	=> "spp_",
-	"05"	=> "phy_",
-	"06" 	=> "sbp_",
-	"07" 	=> "spc_",
-	"08"	=> "cla_",
-	"09"	=> "sbc_",
-	"10" 	=> "ifc_",
-	"11" 	=> "spo_",
-	"12"	=> "ord_",
-	"13"	=> "sbo_",
-	"14" 	=> "ifo_",
-	"15" 	=> "pvo_",
-	"16" 	=> "spf_",
-	"17"	=> "fam_",
-	"18" 	=> "sbf_",
-	"19"	=> "tri_",
-	"20"	=> "sbt_",
-	"21"	=> "gen_",
-	"22"	=> "sbg_",
-	"23"	=> "grp_",
-	"24" 	=> "sbgrp_",
-	"25" 	=> "spe_",
-	"26" 	=> "sbs_",
-	"27" 	=> "var_",
-	"28" 	=> "for_",
-);
-
-my @ncbi_all_ranks = (
-	"superkingdom",
-	"kingdom",
-	"subkingdom",
-	"superphylum",
-	"phylum",
-	"subphylum",
-	"superclass",
-	"class",
-	"subclass",
-	"infraclass",
-	"superorder",
-	"order",
-	"suborder",
-	"infraorder",
-	"parvorder",
-	"superfamily",
-	"family",	
-	"subfamily",
-	"tribe",
-	"subtribe",
-	"genus",	
-	"subgenus",
-	"species_group",	
-	"species_subgroup",
-	"species",
-	"subspecies",
-	"varietas",
-	"forma"
-);
 
 my %typeCode = (
 	"1" => "",
@@ -198,58 +106,9 @@ my %rank_type = (
 	"custom" => 1,
 );
 
-my @selectedRank = @ncbi_all_ranks;
-
 if (!exists $rank_type{$rank}){
 	error("ERROR: invalid rank provided. Use 'main', 'common', 'all' or 'custom'.");
 } 
-
-if ($rank eq "common"){
-	splice(@selectedRank, 25, 3);
-	splice(@selectedRank, 21, 3);
-	splice(@selectedRank, 19, 1);
-	splice(@selectedRank, 13, 2);
-	splice(@selectedRank, 9, 1);
-	splice(@selectedRank, 2, 2);
-} elsif ($rank eq "main"){
-	splice(@selectedRank, 25, 3);
-	splice(@selectedRank, 21, 3);
-	splice(@selectedRank, 17, 3);
-	splice(@selectedRank, 12, 4);
-	splice(@selectedRank, 8, 3);
-	splice(@selectedRank, 5, 2);
-	splice(@selectedRank, 1, 3);
-} elsif ($rank eq "custom"){
-	#my $selectedRank = $cgi->param("srank") if ($cgi->param("srank"));
-	
-	if (!$selectedRank){
-		my $errorMessage = "ERROR: select the ranks to be displayed using srank.\n";
-		$errorMessage .= "Example: -rank custom -srank kingdom,class,family,species\n";
-		$errorMessage .= "Valid ranks are:\n";
-		$errorMessage .= join("\n", @ncbi_all_ranks);	
-		error($errorMessage);
-	} else {
-		$selectedRank =~ s/ |\t//g;
-		$selectedRank = lc $selectedRank;
-		my @selectedRank2 = split(",", $selectedRank);
-		my %selectedRank2;
-		foreach my $srank(@selectedRank2){
-			if(!exists $ncbi_all_ranks{$srank}){
-				my $errorMessage = "ERROR: invalid rank selected: $srank\n";
-				$errorMessage .= "Valid ranks are:\n";
-				$errorMessage .= join("\n", @ncbi_all_ranks);	
-				error($errorMessage);
-			}
-			$selectedRank2{$srank} = ();
-		}
-		@selectedRank = ();
-		foreach my $singlerank(@ncbi_all_ranks){
-			if (exists $selectedRank2{$singlerank}){
-				push(@selectedRank, $singlerank);
-			}
-		}
-	}
-}
 
 my %format_type = (
 	"tab" => 1,
@@ -288,6 +147,69 @@ if ($@) {
 	die "\nERROR: Could not connect to mysql database.\n";
 } else {
 	print "Connected to mysql database.\n";
+}
+
+my %ncbi_all_ranks = (
+	"no rank" => -1,
+);
+my %taxAllnomy_ranks_code;
+my @ncbi_all_ranks;
+
+my $resultsRanks = $wire->query("SELECT * FROM ".$rankTable);
+	while (my $row = $resultsRanks->next_array) {
+		my @row = @$row;
+		$row[0] =~ s/ /_/g;
+		push(@ncbi_all_ranks, $row[0]);
+		$taxAllnomy_ranks_code{$row[3]} = $row[4]."_";
+		$ncbi_all_ranks{$row[0]} = $row[1] - 1;
+	}
+
+my @selectedRank = @ncbi_all_ranks;
+
+if ($rank eq "common"){
+my %commonRanks  = ("superkingdom"=>1,"kingdom"=>1,"phylum"=>1,"subphylum"=>1,"class"=>1,"superclass"=>1,"subclass"=>1,"order"=>1,"superorder"=>1,"suborder"=>1,"family"=>1,"superfamily"=>1,"subfamily"=>1,"genus"=>1,"subgenus"=>1,"species"=>1,"subspecies"=>1);
+	my @newSelectedRanks;
+	foreach my $rank2 (@selectedRank){
+		push(@newSelectedRanks, $rank2) if (exists $commonRanks{$rank2});
+	}
+	@selectedRank = @newSelectedRanks;
+} elsif ($rank eq "main"){
+	my %mainRanks = ("superkingdom"=>1,"phylum"=>1,"class"=>1,"order"=>1,"family"=>1,"genus"=>1,"species"=>1);
+	my @newSelectedRanks;
+	foreach my $rank2 (@selectedRank){
+		push(@newSelectedRanks, $rank2) if (exists $mainRanks{$rank2});
+	}
+	@selectedRank = @newSelectedRanks;
+} elsif ($rank eq "custom"){
+	#my $selectedRank = $cgi->param("srank") if ($cgi->param("srank"));
+	
+	if (!$selectedRank){
+		my $errorMessage = "ERROR: select the ranks to be displayed using srank.\n";
+		$errorMessage .= "Example: -rank custom -srank kingdom,class,family,species\n";
+		$errorMessage .= "Valid ranks are:\n";
+		$errorMessage .= join("\n", @ncbi_all_ranks);	
+		error($errorMessage);
+	} else {
+		$selectedRank =~ s/ |\t//g;
+		$selectedRank = lc $selectedRank;
+		my @selectedRank2 = split(",", $selectedRank);
+		my %selectedRank2;
+		foreach my $srank(@selectedRank2){
+			if(!exists $ncbi_all_ranks{$srank}){
+				my $errorMessage = "ERROR: invalid rank selected: $srank\n";
+				$errorMessage .= "Valid ranks are:\n";
+				$errorMessage .= join("\n", @ncbi_all_ranks);	
+				error($errorMessage);
+			}
+			$selectedRank2{$srank} = ();
+		}
+		@selectedRank = ();
+		foreach my $singlerank(@ncbi_all_ranks){
+			if (exists $selectedRank2{$singlerank}){
+				push(@selectedRank, $singlerank);
+			}
+		}
+	}
 }
 
 my @txid;
@@ -536,6 +458,10 @@ Name of MySQL database with Taxallnomy data
 =item B<-table> <table_name> Default: taxallnomy_lin
 
 Name of MySQL table with Taxallnomy lineage data.
+
+=item B<-rankTable> <table_name> Default: taxallnomy_rank
+
+Name of MySQL table with Taxallnomy rank data.
 
 =item B<-help>
 
