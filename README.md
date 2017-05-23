@@ -79,6 +79,7 @@ superclass      | Taxon code for Superclass rank
 class           | Taxon code for Class rank                       
 subclass        | Taxon code for Subclass rank                    
 infraclass      | Taxon code for Infraclass rank                  
+cohort          | Taxon code for Cohort rank                  
 superorder      | Taxon code for Superorder rank                  
 order           | Taxon code for Order rank                       
 suborder        | Taxon code for Suborder rank                    
@@ -150,10 +151,10 @@ We use the following rules to name the nodes of each type:
    spc_Sarcopterygii;
  - For type 2, we use the abbreviation of the rank name followed by the preposition 
    "of" and followed by the scientific name of the NCBI Taxonomy ID. E.g. For taxon 
-   code 9605.192, we name it as tri_of_Homo;
+   code 9605.202, we name it as tri_of_Homo;
  - For type 3, we use the abbreviation of the rank name followed by the preposition 
    "in" and followed by the scientific name of the NCBI Taxonomy ID. E.g. For taxon 
-   code 9606.263, we name it as sbs_in_Homo sapiens;
+   code 9606.273, we name it as sbs_in_Homo sapiens;
 
 Obs.: Taxa originally ranked in NCBI Taxonomy database have the code 000 and we use 
 their own scientific name to name them.
