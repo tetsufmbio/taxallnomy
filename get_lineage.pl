@@ -57,8 +57,9 @@ my $outfile = "taxallnomy_result";
 my $help = 0;
 my $man	= 0;
 my $database = "taxallnomy";
-my $table = "taxallnomy_lin";
-my $rankTable = "taxallnomy_rank";
+my $table = "lin";
+my $rankTable = "rank";
+my $showranks;
 
 GetOptions(
     'txid=s'	=> \$txid,
@@ -66,6 +67,7 @@ GetOptions(
 	'rank=s'	=> \$rank,
 	'format=s'	=> \$format,
 	'srank=s'	=> \$selectedRank,
+	'showranks!'	=> \$showranks,
 	'showcode!'	=> \$showcode,
 	'user=s'	=> \$userid,
 	'out=s'		=> \$outfile,
@@ -79,6 +81,48 @@ GetOptions(
 
 pod2usage(0) if $man;
 pod2usage(2) if $help;
+
+if ($showranks){
+	# connect to the database
+	#
+	if(!$userid){
+		print "Type MySQL user that have access to taxallnomy database:\n";
+		chomp($userid = <STDIN>);
+	}
+
+	# get password for mysql
+	print "Type MySQL password for user \'$userid\':\n";
+	my $password = &ReadPassword;	
+	chomp $password;
+
+	my $wire = Net::Wire10->new(
+		host     => "localhost",
+		user     => $userid,
+		port     => 3306,
+		password => $password,
+		database => $database
+	);
+
+	eval {$wire->connect;};
+	if ($@) {
+		die "\nERROR: Could not connect to mysql database.\n";
+	} else {
+		print "Connected to mysql database.\n";
+	}
+
+	my @ranks;
+	my $resultsRanks = $wire->query("SELECT rank FROM ".$rankTable." ORDER BY ".$rankTable.".order");
+	while (my $row = $resultsRanks->next_array) {
+		my @row = @$row;
+		$row[0] =~ s/ /_/g;
+		push(@ranks, $row[0]);
+		
+	}
+	
+	print "\nValid taxonomic names:\n";
+	print join("\n", @ranks)."\n\n";
+	exit;
+}
 
 my %typeCode = (
 	"1" => "",
@@ -155,7 +199,7 @@ my %ncbi_all_ranks = (
 my %taxAllnomy_ranks_code;
 my @ncbi_all_ranks;
 
-my $resultsRanks = $wire->query("SELECT * FROM ".$rankTable);
+my $resultsRanks = $wire->query("SELECT * FROM ".$rankTable." ORDER BY ".$rankTable.".order");
 	while (my $row = $resultsRanks->next_array) {
 		my @row = @$row;
 		$row[0] =~ s/ /_/g;
@@ -428,12 +472,12 @@ all: retrieves all taxonomic ranks.
 =item B<-srank> <rank_names>
 
 Use this parameter with -rank set to 'custom'. Select the taxonomic ranks that will comprise the 
-taxonomic lineage. Use comma to separate each rank. Valid taxonomic rank names are:
+taxonomic lineage. Use comma to separate each rank. Valid taxonomic rank names can be consulted 
+using -showranks parameter.
 
-superkingdom, kingdom, subkingdom, superphylum, phylum, subphylum, superclass, class,
-subclass, infraclass, superorder, order, suborder, infraorder, parvorder, superfamily, 
-family, subfamily, tribe, subtribe, genus, subgenus, species_group, species_subgroup, 
-species, subspecies, varietas, forma.
+=item B<-showranks> 
+
+Show all valid taxonomic rank names to be used in the parameter -srank.
 
 =item B<-format> <tab|json|xml> Default: tab
 
@@ -455,11 +499,11 @@ Name of the output file.
 
 Name of MySQL database with Taxallnomy data
 
-=item B<-table> <table_name> Default: taxallnomy_lin
+=item B<-table> <table_name> Default: lin
 
 Name of MySQL table with Taxallnomy lineage data.
 
-=item B<-rankTable> <table_name> Default: taxallnomy_rank
+=item B<-rankTable> <table_name> Default: rank
 
 Name of MySQL table with Taxallnomy rank data.
 
