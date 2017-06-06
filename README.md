@@ -30,32 +30,35 @@ The script will basically download the latest NCBI Taxonomy database and constru
 Taxallnomy hierarchical structure from it. After the running, it will  generate  three 
 files:
 
-    * taxallnomy.sql      - MySQL dump file with all commands to create the Taxallnomy 
-                            database;
-    * taxallnomy_lin.tab  - Tab-delimited file containing the Taxallnomy lineage for 
-                            all taxonomy id;
-    * taxallnomy_tree.tab - Tab-delimited file containing the name for all taxon code 
-                            in Taxallnomy lineage;
+    * taxallnomy_XXX.sql  - Dump file containing SQL commands to create Taxallnomy 
+                            database and the table XXX;
+    * taxallnomy_XXX.tab  - Tab-delimited file containing contents of Taxallnomy  
+                            database of table XXX;
+
+XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree,
+tree_withNoRanks or rank. Detailed dscription of each table is presented below;
 
 To load Taxallnomy database in your local MySQL, go to the path where the three files 
 are located and type the following command line:
 
-    > mysql -u <username> -p < taxallnomy.sql
+    > mysql -u <username> -p < taxallnomy_XXX.sql
 
 or go to MySQL environment and type:
 
-    mysql> source taxallnomy.sql
+    mysql> source taxallnomy_XXX.sql
 
-Loading Taxallnomy database to MySQL may take several minutes, so be patient.
+Loading Taxallnomy database to MySQL may take several minutes depending on which
+table is being loaded, so be patient.
 
-After the loading procedure, your MySQL should have a database called "taxallnomy" and,
-in the taxallnomy database, two tables called "taxallnomy_lin" and "taxallnomy_tree".
+After loading a single table, your MySQL should have a database called "taxallnomy"
+and, in that database, a table named XXX. There is no need to load 
+all tables. Load only those that meet your needs.
 
 
 ##  Table descriptions
 
 
-### 1) taxallnomy_lin
+### 1) lin table
 This table contains all taxonomic lineages of Taxallnomy  database. 
 From this table, you can query for a taxonomic rank of an organism by  its  taxonomy ID 
 (primary key). Each one of 28 taxonomic ranks are represented in a column of this table. 
@@ -64,7 +67,7 @@ taxon code used by Taxallnomy (See the section "Taxallnomy taxon code"). The tax
 can be programmatically generated from the taxon code. Use the script "get_lineage.pl"  to 
 retrieve lineages with taxon name.
 
-* taxallnomy_lin table content:
+* lin table content:
 
 Column          | Description
 ----------------|---------------------------------------------------
@@ -108,19 +111,54 @@ rank            | taxonomic rank of txid in the original database
 \* includes txid in unpublished/unidentified/unclassified/environmental/unassigned/
   incertae sedis/other sequences groups.
 
-### 2) taxallnomy_tree
+### 2) lin_name table
+Same as lin table, but instead of having taxon codes on each taxonomic rank
+column, it contains taxon name. This table occupies more space than the lin table.
+Contents of this table could be retrieved using script get_lineage.pl (see below).
+
+### 3) tree table
 This table provides the hierarchical structure of Taxallnomy database.
 
-* taxallnomy_tree table content:
+* tree table content:
 
-Column    | Description
+Column  | Description
 --------|---------------------------------------------------------
 txid    | Taxon code used by Taxallnomy (primary key)             
 parent  | Taxon code its parent taxon (indexed)                   
 rank    | taxonomic rank of taxon code                            
 
+### 4) tree_withNoRank table
+It has the same strucutre as the tree table. During the 
+generation of the taxallnomy database, some taxa are deleted from the tree to make 
+the taxonomic tree balanced. The deleted taxa are unranked nodes in which no taxonomic 
+ranks can be assigned to them. These nodes are not present in the hierarchical 
+structure stored in tree table, while, in this table, they are preserved. Be aware that 
+the hierarchical strucuture on this table, differently to the tree table, is not balanced.
 
-## Taxallnomy taxon code
+### 5) rank table
+A table containing some information about the taxonomic ranks comprising
+the database and their frequency among all lineages of leaf taxa. 
+
+* rank table contents:
+
+Column       | Description
+-------------|---------------------------------------------------------------------
+rank         | taxonomic rank (TR)                                               
+order        | order of the TR                                                   
+priority     | priority order of TR according its frequency in the lineages      
+code         | TR code                                                           
+abbrev       | TR abbreviation                                                   
+dcount_ncbi  | number of distinct ranked taxa among all lineages of leaf taxa    
+dcount_type1 | number of distinct taxa of type 1 among all lineages of leaf taxa 
+dcount_type2 | number of distinct taxa of type 2 among all lineages of leaf taxa 
+dcount_type3 | number of distinct taxa of type 3 among all lineages of leaf taxa 
+count_ncbi   | number of ranked taxa among all lineages of leaf taxa             
+count_type1  | number of taxa of type 1 among all lineages of leaf taxa          
+count_type2  | number of taxa of type 2 among all lineages of leaf taxa          
+count_type3  | number of taxa of type 3 among all lineages of leaf taxa          
+
+
+## Taxallnomy taxon code and name
 
 
 Taxallnomy primarily uses the Taxonomy ID provided by  NCBI  Taxonomy  database  to 
@@ -163,9 +201,11 @@ their own scientific name to name them.
 ## Retrieving taxonomic lineage
 
 
-After loading the Taxallnomy database, you can use  the  script  'get_lineage.pl'  to 
-programatically retrieve the taxonomic lineage of TaxIDs of interest. To  test  if 
-the script is running properly on your system, type the following command:
+You can use the script 'get_lineage.pl' (this script can be found in 
+taxallnomy_script.tar.gz at the Taxallnomy SourceForge page) to programatically 
+retrieve the taxonomic lineage of TaxIDs of interest. To use this script, you
+have to load only the lin and the rank tables to taxallnomy database on MySQL. To 
+test if the script is running properly on your system, type the following command:
 
     > perl get_lineage.pl
 
