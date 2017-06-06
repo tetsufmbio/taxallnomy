@@ -27,7 +27,7 @@ To run the script, just type in a UNIX terminal the following command:
     > perl generate_taxallnomy.pl
 
 The script will basically download the latest NCBI Taxonomy database and construct the
-Taxallnomy hierarchical structure from it. After the running, it will  generate  three 
+Taxallnomy hierarchical structure from it. After the running, it will  generate  these 
 files:
 
     * taxallnomy_XXX.sql  - Dump file containing SQL commands to create Taxallnomy 
@@ -38,7 +38,7 @@ files:
 XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree,
 tree_withNoRanks or rank. Detailed dscription of each table is presented below;
 
-To load Taxallnomy database in your local MySQL, go to the path where the three files 
+To load Taxallnomy database in your local MySQL, go to the path where these files 
 are located and type the following command line:
 
     > mysql -u <username> -p < taxallnomy_XXX.sql
