@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.4.9
+# Version 1.4.11
 
 ##############################################################################
 #                                                                            #
@@ -46,33 +46,80 @@
 # - Verifies if there are unranked nodes with CR <= NP in the path to NA.    #
 # - taxallnomy_lin_name table added.                                         #
 # - script deal with rank update;                                            #
+# - it also generates a tree without deleting unranked nodes without         #
+# candidate ranks;                                                           #
 #                                                                            #
 ##############################################################################
 
 use strict;
 use Data::Dumper;
 use POSIX;
+use Getopt::Long;
+use Pod::Usage;
 
 my $dir = "taxallnomy_data";
+my $taxallnomy_version = "1.4.10";
+my $version;
+my $help;
+my $man;
+my $local_dump;
+
+GetOptions(
+    'local=s'=> \$local_dump,
+    'help!'     	=> \$help,
+	'version!'		=> \$version,
+	'man!'			=> \$man,
+) or pod2usage(-verbose => 99, 
+            -sections => [ qw(NAME SYNOPSIS) ] );
+
+pod2usage(0) if $man;
+pod2usage(2) if $help;
+if ($version){
+	print $taxallnomy_version."\n";
+	exit;
+}
 
 if(-d $dir){
 	die "ERROR: Can't create the directory $dir. Probably because this directory exists in your current working directory.\n";
+} else {
+	system("mkdir $dir");
 } 
 
-# taxonomy table
-print "Making Taxonomy table file...\n";
-print "  Downloading taxdump.tar.gz... \n";
-system("wget -Nnv ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz");
-system("chmod u+w taxdump.tar.gz");
-if (!-e "taxdump.tar.gz"){
-	die "ERROR: Couldn't find/download the file taxdump.tar.gz.\n"
+
+if($local_dump){
+	if (-e $local_dump){
+		system("cp $local_dump $dir");
+		chdir $dir;
+		system("tar -zxf $local_dump");
+	} else {
+		die "ERROR: Can't find the taxdump.tar.gz";
+	}
+} else {
+	print "  Downloading taxdump.tar.gz... \n";
+	system("wget -Nnv ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz");
+	system("chmod u+w taxdump.tar.gz");
+	if (!-e "taxdump.tar.gz"){
+		die "ERROR: Couldn't find/download the file taxdump.tar.gz.\n"
+	}
+	print "  Making table... \n";
+	system("cp taxdump.tar.gz $dir");
+	chdir $dir;
+	system("tar -zxf taxdump.tar.gz");
 }
-print "  Making table... \n";
-system("mkdir $dir");
-system("cp taxdump.tar.gz $dir");
-chdir $dir;
-system("tar -zxf taxdump.tar.gz");
-open(TXID, "< nodes.dmp") or die; 
+
+# verify files
+
+if (-e "names.dmp" && -e "nodes.dmp" && -e "merged.dmp"){
+
+} else {
+	die "ERROR: Can't find one of those files: names.dmp, nodes.dmp or merged.dmp.\nPlease, check if those files are included in taxdump.tar.gz provided or downloaded.\n\n";
+}
+
+# taxonomy table
+
+print "Making Taxonomy table file...\n";
+
+open(TXID, "< nodes.dmp") or die "ERROR: Can't open nodes.dmp"; 
 
 my %ncbi_all_ranks = (
 	"no rank" => -1,
@@ -113,7 +160,7 @@ while(my $line = <TXID>){
 
 close TXID;
 
-open(TXIDNAME, "< names.dmp") or die; 
+open(TXIDNAME, "< names.dmp") or die "ERROR: Can't open names.dmp"; 
 
 while(my $line = <TXIDNAME>){
 	chomp $line;
@@ -506,9 +553,9 @@ foreach my $rank2analyse(@ncbi_all_ranks){
 				@possibleRanks = @{$table[$node][5]} if ($table[$node][5]);
 				push(@possibleRanks, $rank2analyseInt);				
 				$table[$node][5] = \@possibleRanks;
-				if ($rank2analyseInt == 20){
+				if ($rank2analyseInt == $ncbi_all_ranks{"genus"}){
 					push(@genus2analyse, $node);
-				} elsif ($rank2analyseInt == 24){
+				} elsif ($rank2analyseInt == $ncbi_all_ranks{"species"}){
 					push(@species2analyse, $node);
 				}
 			} else {
@@ -539,9 +586,9 @@ while (scalar @genus2analyse > 0){
 				my $node3 = shift @nodes2analyse5;
 				if($table[$node3][1] != -1){
 					# ranked taxon
-					if ($table[$node3][1] < 24){
+					if ($table[$node3][1] < $ncbi_all_ranks{"species"}){
 						push (@nodes2analyse5, @{$table[$node3][2]}) if $table[$node3][2];
-					} elsif ($table[$node3][1] == 24){
+					} elsif ($table[$node3][1] == $ncbi_all_ranks{"species"}){
 						# it is a species
 						$controlSpecies = 1;
 						last;
@@ -570,7 +617,7 @@ while (scalar @genus2analyse > 0){
 				my @newPossibleRanksCurrent;
 				my @transferPossibleRanks;
 				for(my $i = 0; $i < scalar @possibleRanksCurrent; $i++){
-					if ($possibleRanksCurrent[$i] < 20) {
+					if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"genus"}) {
 						push(@newPossibleRanksCurrent, $possibleRanksCurrent[$i]);
 					} else {
 						push(@transferPossibleRanks, $possibleRanksCurrent[$i]);
@@ -578,7 +625,7 @@ while (scalar @genus2analyse > 0){
 				}
 				$table[$node4][5] = undef;
 				$table[$node4][5] = \@newPossibleRanksCurrent if (scalar @newPossibleRanksCurrent > 0);
-				$table[$node4][7][1] = 20;
+				$table[$node4][7][1] = $ncbi_all_ranks{"genus"};
 				# transfer the ranks to child unranked nodes
 				if ($table[$node4][2]){
 					my @nodes2analyseChild;
@@ -587,7 +634,7 @@ while (scalar @genus2analyse > 0){
 						my $nodeChild = shift @nodes2analyseChild;
 						if($table[$nodeChild][1] == -1){
 							push(@nodes2analyseChild, @{$table[$nodeChild][2]}) if ($table[$nodeChild][2]);
-							$table[$node4][7][1] = 20;
+							$table[$node4][7][1] = $ncbi_all_ranks{"genus"};
 							$table[$nodeChild][5] = undef;
 						} else {
 							next;
@@ -615,9 +662,9 @@ while (scalar @species2analyse > 0){
 			my $node2 = shift @nodes2analyse4;
 			if($table[$node2][1] != -1){
 				# ranked taxon
-				if ($table[$node2][1] > 20){
+				if ($table[$node2][1] > $ncbi_all_ranks{"genus"}){
 					push (@nodes2analyse4, $table[$node2][0]);
-				} elsif ($table[$node2][1] == 20){
+				} elsif ($table[$node2][1] == $ncbi_all_ranks{"genus"}){
 					# it is a genus
 					$genusName = $table[$node2][3][0];
 					
@@ -650,14 +697,14 @@ while (scalar @species2analyse > 0){
 				$table[$node4][6][0] = 0;
 				push(@noSpecies, $table[$node4][3][0]);
 				push (@nodes2analyse6, @{$table[$node4][2]}) if $table[$node4][2];
-				$table[$node4][7][1] = 24;
+				$table[$node4][7][1] = $ncbi_all_ranks{"species"};
 				# modify the possible ranks of this node
 				if ($table[$node4][5]){
 					my @possibleRanksCurrent = @{$table[$node4][5]};
 					my @newPossibleRanksCurrent;
 					my @transferPossibleRanks;
 					for(my $i = 0; $i < scalar @possibleRanksCurrent; $i++){
-						if ($possibleRanksCurrent[$i] < 24) {
+						if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"species"}) {
 							push(@newPossibleRanksCurrent, $possibleRanksCurrent[$i]);
 						} else {
 							push(@transferPossibleRanks, $possibleRanksCurrent[$i]);
@@ -699,14 +746,14 @@ while (scalar @species2analyse > 0){
 	} else {
 		$table[$node][6][0] = 0;
 		push(@noSpecies, $table[$node][3][0]);
-		$table[$node][7][1] = 24;
+		$table[$node][7][1] = $ncbi_all_ranks{"species"};
 		# modify the possible ranks of this node
 		if ($table[$node][5]){
 			my @possibleRanksCurrent = @{$table[$node][5]};
 			my @newPossibleRanksCurrent;
 			my @transferPossibleRanks;
 			for(my $i = 0; $i < scalar @possibleRanksCurrent; $i++){
-				if ($possibleRanksCurrent[$i] < 24) {
+				if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"species"}) {
 					push(@newPossibleRanksCurrent, $possibleRanksCurrent[$i]);
 				} else {
 					push(@transferPossibleRanks, $possibleRanksCurrent[$i]);
@@ -956,12 +1003,19 @@ while (scalar @nodes2analyse3 != 0){
 
 print "  Writing table... \n";
 
-open(DUMP, "> taxallnomy.sql") or die;
+#open(DUMP, "> taxallnomy.sql") or die;
 open(LIN, "> taxallnomy_lin.tab") or die;
+open(LINSQL, "> taxallnomy_lin.sql") or die;
 open(RANK, "> taxallnomy_rank.tab") or die;
-#open(LINNAME, "> taxallnomy_lin_name.tab") or die;
+open(RANKSQL, "> taxallnomy_rank.sql") or die;
+open(LINNAME, "> taxallnomy_lin_name.tab") or die;
+open(LINNAMESQL, "> taxallnomy_lin_name.sql") or die;
 open(TREE, "> taxallnomy_tree.tab") or die;
-print DUMP '
+open(TREESQL, "> taxallnomy_tree.sql") or die;
+open(TREEUNB, "> taxallnomy_tree_withNoRank.tab") or die;
+open(TREEUNBSQL, "> taxallnomy_tree_withNoRank.sql") or die;
+
+my $dumpHead = '
 -- MySQL dump 10.13  Distrib 5.6.25, for Linux (x86_64)
 --
 -- Host: localhost    Database: taxallnomy
@@ -987,21 +1041,25 @@ CREATE DATABASE /*!32312 IF NOT EXISTS*/ `taxallnomy` /*!40100 DEFAULT CHARACTER
 
 USE `taxallnomy`;
 
+';
+
+# sql for lineage table
+print LINSQL $dumpHead.'
 --
--- Table structure for table `taxallnomy_lin`
+-- Table structure for table `lin`
 --
 
-DROP TABLE IF EXISTS `taxallnomy_lin`;
+DROP TABLE IF EXISTS `lin`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `taxallnomy_lin` (
+CREATE TABLE `lin` (
   `txid` int(11) NOT NULL,
 ';
 foreach my $rank(@rankOrder){
-	print DUMP "  `".$rank."` DECIMAL(20,3) NOT NULL,\n"
+	print LINSQL "  `".$rank."` DECIMAL(20,3) NOT NULL,\n"
 }
 
-print DUMP  '`sciname` varchar(200) NOT NULL,
+print LINSQL  '`sciname` varchar(200) NOT NULL,
   `comname` varchar(200),
   `leaf` tinyint(1) NOT NULL,
   `unclassified` tinyint(1) NOT NULL,
@@ -1012,13 +1070,55 @@ print DUMP  '`sciname` varchar(200) NOT NULL,
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `taxallnomy_tree`
+-- Dumping data for table `taxallnomy`
 --
 
-DROP TABLE IF EXISTS `taxallnomy_tree`;
+LOAD DATA LOCAL INFILE \'taxallnomy_lin.tab\' INTO TABLE lin;
+';
+
+# sql for lineage name table
+print LINNAMESQL $dumpHead.'
+--
+-- Table structure for table `lin_name`
+--
+
+DROP TABLE IF EXISTS `lin_name`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `taxallnomy_tree` (
+CREATE TABLE `lin_name` (
+  `txid` int(11) NOT NULL,
+';
+foreach my $rank(@rankOrder){
+	print LINNAMESQL "  `".$rank."` VARCHAR(200) NOT NULL,\n"
+}
+
+print LINNAMESQL  '`sciname` varchar(200) NOT NULL,
+  `comname` varchar(200),
+  `leaf` tinyint(1) NOT NULL,
+  `unclassified` tinyint(1) NOT NULL,
+  `merged` tinyint(1) NOT NULL,
+  `rank` varchar(20) NOT NULL,
+  PRIMARY KEY (`txid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `taxallnomy`
+--
+
+LOAD DATA LOCAL INFILE \'taxallnomy_lin_name.tab\' INTO TABLE lin_name;
+';
+
+# sql for tree table
+print TREESQL $dumpHead.'
+--
+-- Table structure for table `tree`
+--
+
+DROP TABLE IF EXISTS `tree`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `tree` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
@@ -1026,16 +1126,54 @@ CREATE TABLE `taxallnomy_tree` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-ALTER TABLE `taxallnomy_tree` ADD INDEX `parent` (`parent`);
+ALTER TABLE `tree` ADD INDEX `parent` (`parent`);
 
 --
--- Table structure for table `taxallnomy_rank`
+-- Dumping data for table `taxallnomy`
 --
 
-DROP TABLE IF EXISTS `taxallnomy_rank`;
+LOAD DATA LOCAL INFILE \'taxallnomy_tree.tab\' INTO TABLE tree;
+
+';
+
+# sql for tree with no candidate rank taxon table
+print TREEUNBSQL $dumpHead.'
+--
+-- Table structure for table `tree_withNoRank`
+--
+
+DROP TABLE IF EXISTS `tree_withNoRank`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `taxallnomy_rank` (
+CREATE TABLE `tree_withNoRank` (
+  `txid` DECIMAL(20,3) NOT NULL,
+  `parent`DECIMAL(20,3) NOT NULL,
+  `rank` varchar(20) NOT NULL,
+  PRIMARY KEY (`txid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+ALTER TABLE `tree_withNoRank` ADD INDEX `parent` (`parent`);
+
+--
+-- Dumping data for table `taxallnomy`
+--
+
+LOAD DATA LOCAL INFILE \'taxallnomy_tree_withNoRank.tab\' INTO TABLE tree_withNoRank;
+
+';
+
+# sql for rank table
+print RANKSQL $dumpHead.'
+
+--
+-- Table structure for table `rank`
+--
+
+DROP TABLE IF EXISTS `rank`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `rank` (
   `rank` VARCHAR(20) NOT NULL,
   `order` INT NOT NULL,
   `priority` INT NOT NULL,
@@ -1056,13 +1194,11 @@ CREATE TABLE `taxallnomy_rank` (
 --
 -- Dumping data for table `taxallnomy`
 --
-LOAD DATA LOCAL INFILE \'taxallnomy_rank.tab\' INTO TABLE taxallnomy_rank;
 
-LOAD DATA LOCAL INFILE \'taxallnomy_tree.tab\' INTO TABLE taxallnomy_tree;
-
-LOAD DATA LOCAL INFILE \'taxallnomy_lin.tab\' INTO TABLE taxallnomy_lin;
+LOAD DATA LOCAL INFILE \'taxallnomy_rank.tab\' INTO TABLE rank;
 
 ';
+
 
 my %typeCode = (
 	1 => "",
@@ -1075,6 +1211,12 @@ $taxallnomy_tree{1}{"parent"} = 0;
 $taxallnomy_tree{1}{"sciname"} = "root";
 $taxallnomy_tree{1}{"comname"} = "all";
 $taxallnomy_tree{1}{"rank"} = "no rank";
+
+my %taxallnomy_treeNoRank;
+$taxallnomy_treeNoRank{1}{"parent"} = 0;
+$taxallnomy_treeNoRank{1}{"sciname"} = "root";
+$taxallnomy_treeNoRank{1}{"comname"} = "all";
+$taxallnomy_treeNoRank{1}{"rank"} = "no rank";
 
 my @insert;
 my %rankCountType;
@@ -1103,7 +1245,7 @@ foreach my $txid(@txid){
  		$parent = $table[$species][0];
 		unshift (@lineage, [@{$table[$species]}]);
 	}
-	my $taxallnomyLineage = generate_taxallnomy(\@lineage);
+	my ($taxallnomyLineage, $taxallnomyLineageNoRank) = generate_taxallnomy(\@lineage);
 	my @taxallnomyLineage = @$taxallnomyLineage;
 
 	for(my $i = scalar @taxallnomyLineage - 1; $i >= 0; $i--){
@@ -1121,6 +1263,7 @@ foreach my $txid(@txid){
 		}
 		
 		next if (exists $taxallnomy_tree{$taxallnomyLineage[$i]});
+		next if (!$leaf);
 		$taxallnomy_tree{$taxallnomyLineage[$i]} = 1;
 		# parent
 		my $parent2;
@@ -1137,6 +1280,36 @@ foreach my $txid(@txid){
 		print TREE $defLine;
 		
 	}
+	
+	my @taxallnomyLineageNoRank = @$taxallnomyLineageNoRank;
+
+	if ($leaf){
+		for(my $i = scalar @taxallnomyLineageNoRank - 1; $i >= 0; $i--){
+			next if (exists $taxallnomy_treeNoRank{$taxallnomyLineageNoRank[$i]});
+			$taxallnomy_treeNoRank{$taxallnomyLineageNoRank[$i]} = 1;
+			# parent
+			my $parent2;
+			if ($i - 1 >= 0){
+				$parent2 = $taxallnomyLineageNoRank[$i - 1];
+			} else {
+				$parent2 = 1;
+			}
+			# rank
+			my $rank2;
+			if ($taxallnomyLineageNoRank[$i] =~ /\.(\d{2})(\d)$/){
+				my $rankCode = $1;
+				my $rankType = $2;
+				$rank2 = $ncbi_all_ranks[$rankCode - 1];
+			} else {
+				$rank2 = $table[$taxallnomyLineageNoRank[$i]][8];
+			}
+			
+			my $txidCode2 = $taxallnomyLineageNoRank[$i];
+			my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\n";
+			print TREEUNB $defLine;
+		}
+	}
+	
 	# scientific name and common name
 	my $comname2;
 	
@@ -1162,37 +1335,37 @@ foreach my $txid(@txid){
 	print LIN $defLine;
 	
 	# data for LINNAME
-	#my @taxallnomyLineageName;
-	#for(my $i = 0; $i < scalar @taxallnomyLineage; $i++){
-	#	if ($taxallnomyLineage[$i] =~ /^(\d+)\.(\d{2})(\d)$/){
-	#		my $txidCode = $1;
-	#		my $rankCode = $2;
-	#		my $typeCode = $3;
-	#		my $name3 = $table[$txidCode][3][0];
-			
-	#		my $rank = $taxallnomy_ranks_code{"code"}{$rankCode}{"abbrev"}."_";
-	#		my $code = $typeCode{$typeCode};
-	#		push(@taxallnomyLineageName, $rank.$code.$name3);
-	
-	#	} else {
-	#		my $name3 = $table[$taxallnomyLineage[$i]][3][0];
-	#		push(@taxallnomyLineageName, $name3);
-	#	}
+	my @taxallnomyLineageName;
+	for(my $i = 0; $i < scalar @taxallnomyLineage; $i++){
+		if ($taxallnomyLineage[$i] =~ /^(\d+)\.(\d{2})(\d)$/){
+			my $txidCode = $1;
+			my $rankCode = $2;
+			my $typeCode = $3;
+			my $name3 = $table[$txidCode][3][0];
 		
-	#}
-	#my $taxallnomyLineageName2 = join("\t", @taxallnomyLineageName);
-	#$taxallnomyLineageName2 =~ s/\\/\\\\/g;
-	#$taxallnomyLineageName2 =~ s/'/\\'/g;
-	#$taxallnomyLineageName2 =~ s/%/\\%/g;
+			my $rank = $taxallnomy_ranks_code{"code"}{$rankCode}{"abbrev"}."_";
+			my $code = $typeCode{$typeCode};
+			push(@taxallnomyLineageName, $rank.$code.$name3);
 	
-	#my $defLine3 = $txid."\t".$taxallnomyLineageName2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t0\t$rank\n";
-	#print LINNAME $defLine3;
+		} else {
+			my $name3 = $table[$taxallnomyLineage[$i]][3][0];
+			push(@taxallnomyLineageName, $name3);
+		}
+		
+	}
+	my $taxallnomyLineageName2 = join("\t", @taxallnomyLineageName);
+	$taxallnomyLineageName2 =~ s/\\/\\\\/g;
+	$taxallnomyLineageName2 =~ s/'/\\'/g;
+	$taxallnomyLineageName2 =~ s/%/\\%/g;
+	
+	my $defLine3 = $txid."\t".$taxallnomyLineageName2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t0\t$rank\n";
+	print LINNAME $defLine3;
 	if (exists $merged{$txid}){
 		foreach my $merged(keys %{$merged{$txid}{"merged"}}){
 			my $defLine2 = $merged."\t".$taxallnomyLineage2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t1\t$rank\n";
 			print LIN $defLine2;
-			#my $defLine4 = $merged."\t".$taxallnomyLineageName2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t1\t$rank\n";
-			#print LINNAME $defLine4;
+			my $defLine4 = $merged."\t".$taxallnomyLineageName2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t1\t$rank\n";
+			print LINNAME $defLine4;
 		}
 	}	
 }
@@ -1244,10 +1417,14 @@ sub generate_taxallnomy {
 	}
 	my $m = 0;
 	my @lineageTaxAllnomy;
+	my @lineageTaxAllnomyUnbalanced;
+	my %lineageTaxAllnomyUnbalanced;
 	for (my $i = 0; $i < scalar @ncbi_all_ranks; $i++){
 		if (exists $lineageExRank{$ncbi_all_ranks[$i]}){ # ranked taxon
 			$m = $lineageExRank{$ncbi_all_ranks[$i]};
 			push (@lineageTaxAllnomy, $lineageEx{$m}{"name"});
+			push (@lineageTaxAllnomyUnbalanced, $lineageEx{$m}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}});
+			$lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}} = 1;
 			
 		} else { # unranked taxon
 			my $l = $m;
@@ -1286,6 +1463,8 @@ sub generate_taxallnomy {
 						}
 					} else {
 						$l++;
+						push (@lineageTaxAllnomyUnbalanced, $lineageEx{$l}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}});
+						$lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}} = 1;
 					}
 				}
 			}
@@ -1295,9 +1474,10 @@ sub generate_taxallnomy {
 			$append += $taxAllnomy_ranks{$ncbi_all_ranks[$i]};
 			$append += $lineageEx{$l}{"name"};
 			push (@lineageTaxAllnomy, $append);
-
+			push (@lineageTaxAllnomyUnbalanced, $append) if (!exists $lineageTaxAllnomyUnbalanced{$append});
+			$lineageTaxAllnomyUnbalanced{$append} = 1;
 		}
 	}
 		
-	return \@lineageTaxAllnomy;
+	return (\@lineageTaxAllnomy, \@lineageTaxAllnomyUnbalanced);
 }
