@@ -35,8 +35,8 @@ files:
     * taxallnomy_XXX.tab  - Tab-delimited file containing contents of Taxallnomy  
                             database of table XXX;
 
-XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree,
-tree_withNoRanks or rank. Detailed dscription of each table is presented below;
+XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
+tree_all or rank. Detailed dscription of each table is presented below;
 
 To load Taxallnomy database in your local MySQL, go to the path where these files 
 are located and type the following command line:
