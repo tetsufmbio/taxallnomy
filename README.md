@@ -116,7 +116,7 @@ Same as lin table, but instead of having taxon codes on each taxonomic rank
 column, it contains taxon name. This table occupies more space than the lin table.
 Contents of this table could be retrieved using script get_lineage.pl (see below).
 
-### 3) tree table
+### 3) tree_balanced table
 This table provides the hierarchical structure of Taxallnomy database.
 
 * tree table content:
@@ -127,13 +127,13 @@ txid    | Taxon code used by Taxallnomy (primary key)
 parent  | Taxon code its parent taxon (indexed)                   
 rank    | taxonomic rank of taxon code                            
 
-### 4) tree_withNoRank table
-It has the same strucutre as the tree table. During the 
+### 4) tree_all table
+It has the same strucutre as the tree_balanced table. During the 
 generation of the taxallnomy database, some taxa are deleted from the tree to make 
 the taxonomic tree balanced. The deleted taxa are unranked nodes in which no taxonomic 
 ranks can be assigned to them. These nodes are not present in the hierarchical 
 structure stored in tree table, while, in this table, they are preserved. Be aware that 
-the hierarchical strucuture on this table, differently to the tree table, is not balanced.
+the hierarchical strucuture on this table, differently to the tree_balanced table, is not balanced.
 
 ### 5) rank table
 A table containing some information about the taxonomic ranks comprising
