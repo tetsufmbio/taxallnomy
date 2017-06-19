@@ -58,7 +58,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.4.10";
+my $taxallnomy_version = "1.4.12";
 my $version;
 my $help;
 my $man;
@@ -215,8 +215,8 @@ foreach my $rank1(keys %hash_rank){
 			$hash_allRankRadical{$rank2} = $radical;
 			$hash_allRankStem{$rank1} = $rank1;
 			$hash_allRankStem{$rank2} = $rank1;
-			$hash_radical{$radical}{$rank1} = 1;
-			$hash_radical{"stem"}{$rank1} = 1;
+			$hash_radical{$radical}{$rank1} = $rank2;
+			$hash_radical{"stem"}{$rank1} = $rank1;
 			$hash_withRadical{$rank1} = 1;
 			$hash_withRadical{$rank2} = 1;
 		}
@@ -226,7 +226,7 @@ foreach my $rank1(keys %hash_rank){
 foreach my $rank(keys %hash_rank){
 	if (!exists $hash_withRadical{$rank}){
 		$hash_stem{$rank}{$rank} = "stem";
-		$hash_radical{"stem"}{$rank} = 1;
+		$hash_radical{"stem"}{$rank} = $rank;
 		$hash_allRankRadical{$rank} = "stem";
 		$hash_allRankStem{$rank} = $rank;
 	}
@@ -235,6 +235,7 @@ foreach my $rank(keys %hash_rank){
 # determine rank order
 print "  Determining rank order... \n";
 my %rankOrder;
+my %stemOrder;
 my %rankCount;
 for(my $i = 0; $i < scalar @txid; $i++){
 	my $node = $txid[$i];
@@ -257,10 +258,13 @@ for(my $i = 0; $i < scalar @txid; $i++){
 	
 	if (scalar @ranksLineage > 1){
 		for(my $j = 0; $j < scalar @ranksLineage; $j++){
+			# counting all and distinct taxa in each rank
 			$rankCount{"all"}{$ranksLineage[$j]} += 1 if (!$unclassControl);
 			$rankCount{"distinct"}{$ranksLineage[$j]}{$lineage[$j]} = 1 if (!$unclassControl);
+			
 			for(my $k = $j+1; $k < scalar @ranksLineage; $k++){
 				$rankOrder{$ranksLineage[$j]}{$ranksLineage[$k]} = 1;
+				$stemOrder{$hash_allRankStem{$ranksLineage[$j]}}{$hash_allRankStem{$ranksLineage[$k]}} = 1 if ($hash_allRankStem{$ranksLineage[$j]} ne $hash_allRankStem{$ranksLineage[$k]});
 			}
 		}
 	} else {
@@ -292,12 +296,14 @@ foreach my $radical(keys %hash_radical){
 	}
 }
 
+my @stemOrder;
+my %hash_stem2 = map {$_ => 1 } keys %hash_stem;
 my @rankOrder;
-while (scalar(keys %hash_rank) > 0){
-	my @ranks = keys %hash_rank;
+while (scalar(keys %hash_stem2) > 0){
+	my @ranks = keys %hash_stem2;
 	my %hash_rank2 = map { $_ => 1 } @ranks;
-	foreach my $rank (keys %rankOrder) {
-		foreach my $rank2(keys %{$rankOrder{$rank}}){
+	foreach my $rank (keys %stemOrder) {
+		foreach my $rank2(keys %{$stemOrder{$rank}}){
 			if (exists $hash_rank2{$rank2}){
 				delete $hash_rank2{$rank2};
 			}
@@ -306,76 +312,32 @@ while (scalar(keys %hash_rank) > 0){
 	my @rank3 = keys %hash_rank2;
 	if (scalar(@rank3) == 1){
 		#print $rank3[0]."\n";
-		push(@rankOrder, $rank3[0]);
-		delete $hash_rank{$rank3[0]};
+		push(@stemOrder, $rank3[0]);
+		delete $hash_stem2{$rank3[0]};
 		delete $hash_rank2{$rank3[0]};
-		delete $rankOrder{$rank3[0]};
+		delete $stemOrder{$rank3[0]};
 	} else {
-		# verify if they are from the same stem of the last rank
-		my $lastRank = $rankOrder[$#rankOrder];
-		$lastRank = $hash_allRankStem{$lastRank};
-		my @newRank3;
-		my @noNewRank3;
-		foreach my $rank4(@rank3){
-			my $radical = $rank4;
-			$radical = $hash_allRankStem{$radical};
-			if ($radical eq $lastRank){
-				push (@newRank3,$rank4);
-			} else {
-				push (@noNewRank3,$rank4);
-			}
+	
+		my %hash_countRank3;
+		foreach my $rank3(@rank3){
+			$hash_countRank3{$rank3} = scalar(keys $rankCount{"distinct"}{$rank3});
 		}
-		if (scalar @newRank3 == 1){
-			#print $rank3[0]."\n";
-			push(@rankOrder, $newRank3[0]);
-			delete $hash_rank{$newRank3[0]};
-			delete $hash_rank2{$newRank3[0]};
-			delete $rankOrder{$newRank3[0]};
-		} elsif (scalar @newRank3 > 1) {
-			# verify their radicals to determine the order
-			my %hash_score;
-			for(my $i = 0; $i < scalar @newRank3; $i++){
-				my $radicalScore = $hashRankScore{$hash_allRankStem{$newRank3[$i]}};
-				$hash_score{$radicalScore} = $newRank3[$i];
-			}
-			
-			foreach my $score(sort {$b <=> $a} keys %hash_score){
-				push(@rankOrder, $hash_score{$score});
-				delete $hash_rank{$hash_score{$score}};
-				delete $hash_rank2{$hash_score{$score}};
-				delete $rankOrder{$hash_score{$score}};
-			}
-		} else {
-			# verify if they are from the same stem
-			my $control = 0;
-			for(my $i = 0; $i < scalar @noNewRank3; $i++){
-				my $stem1 = $hash_allRankStem{$noNewRank3[$i]};
-				for(my $j = $i+1; $j < scalar @noNewRank3; $j++){
-					my $stem2 = $hash_allRankStem{$noNewRank3[$j]};
-					if ($stem1 ne $stem2){
-						$control = 1;
-						last;
-					}
-				}
-			}
-			if (!$control){
-				# verify their radicals to determine the order
-				my %hash_score;
-				for(my $i = 0; $i < scalar @noNewRank3; $i++){
-					my $radicalScore = $hashRankScore{$hash_allRankStem{$noNewRank3[$i]}};
-					$hash_score{$radicalScore} = $noNewRank3[$i];
-				}
-				
-				foreach my $score(sort {$b <=> $a} keys %hash_score){
-					push(@rankOrder, $hash_score{$score});
-					delete $hash_rank{$hash_score{$score}};
-					delete $hash_rank2{$hash_score{$score}};
-					delete $rankOrder{$hash_score{$score}};
-				}
-			} else {
-				print Dumper(\@rank3);
-				die "Can't determine rank order.\nPlease notify me about this error (tetsufmbio\@gmail.com).\n\n";
-			}
+		print "NOTE: the order of these ranks could not be precisely determined: ".join(",", @rank3).". Stablished order is:\n";
+		foreach my $rank3(sort {$hash_countRank3{$a} <=> $hash_countRank3{$b}} keys %hash_countRank3){
+			print "      ".$rank3."\n";
+			push(@stemOrder, $rank3);
+			delete $hash_stem2{$rank3};
+			delete $hash_rank2{$rank3};
+			delete $stemOrder{$rank3};
+		}
+	}
+}
+
+my @radicalOrder = sort {$hashRankScore{$b} <=> $hashRankScore{$a}} keys %hashRankScore;
+foreach my $stemOrder(@stemOrder){
+	foreach my $radicalOrder(@radicalOrder){
+		if (exists $hash_radical{$radicalOrder}{$stemOrder}){
+			push(@rankOrder, $hash_radical{$radicalOrder}{$stemOrder});
 		}
 	}
 }
@@ -1010,10 +972,10 @@ open(RANK, "> taxallnomy_rank.tab") or die;
 open(RANKSQL, "> taxallnomy_rank.sql") or die;
 open(LINNAME, "> taxallnomy_lin_name.tab") or die;
 open(LINNAMESQL, "> taxallnomy_lin_name.sql") or die;
-open(TREE, "> taxallnomy_tree.tab") or die;
-open(TREESQL, "> taxallnomy_tree.sql") or die;
-open(TREEUNB, "> taxallnomy_tree_withNoRank.tab") or die;
-open(TREEUNBSQL, "> taxallnomy_tree_withNoRank.sql") or die;
+open(TREE, "> taxallnomy_tree_balanced.tab") or die;
+open(TREESQL, "> taxallnomy_tree_balanced.sql") or die;
+open(TREEUNB, "> taxallnomy_tree_all.tab") or die;
+open(TREEUNBSQL, "> taxallnomy_tree_all.sql") or die;
 
 my $dumpHead = '
 -- MySQL dump 10.13  Distrib 5.6.25, for Linux (x86_64)
@@ -1109,16 +1071,16 @@ print LINNAMESQL  '`sciname` varchar(200) NOT NULL,
 LOAD DATA LOCAL INFILE \'taxallnomy_lin_name.tab\' INTO TABLE lin_name;
 ';
 
-# sql for tree table
+# sql for tree_balanced table
 print TREESQL $dumpHead.'
 --
--- Table structure for table `tree`
+-- Table structure for table `tree_balanced`
 --
 
-DROP TABLE IF EXISTS `tree`;
+DROP TABLE IF EXISTS `tree_balanced`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tree` (
+CREATE TABLE `tree_balanced` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
@@ -1126,26 +1088,26 @@ CREATE TABLE `tree` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-ALTER TABLE `tree` ADD INDEX `parent` (`parent`);
+ALTER TABLE `tree_balanced` ADD INDEX `parent` (`parent`);
 
 --
 -- Dumping data for table `taxallnomy`
 --
 
-LOAD DATA LOCAL INFILE \'taxallnomy_tree.tab\' INTO TABLE tree;
+LOAD DATA LOCAL INFILE \'taxallnomy_tree_balanced.tab\' INTO TABLE tree_balanced;
 
 ';
 
 # sql for tree with no candidate rank taxon table
 print TREEUNBSQL $dumpHead.'
 --
--- Table structure for table `tree_withNoRank`
+-- Table structure for table `tree_all`
 --
 
-DROP TABLE IF EXISTS `tree_withNoRank`;
+DROP TABLE IF EXISTS `tree_all`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tree_withNoRank` (
+CREATE TABLE `tree_all` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
@@ -1153,13 +1115,13 @@ CREATE TABLE `tree_withNoRank` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-ALTER TABLE `tree_withNoRank` ADD INDEX `parent` (`parent`);
+ALTER TABLE `tree_all` ADD INDEX `parent` (`parent`);
 
 --
 -- Dumping data for table `taxallnomy`
 --
 
-LOAD DATA LOCAL INFILE \'taxallnomy_tree_withNoRank.tab\' INTO TABLE tree_withNoRank;
+LOAD DATA LOCAL INFILE \'taxallnomy_tree_all.tab\' INTO TABLE tree_all;
 
 ';
 
