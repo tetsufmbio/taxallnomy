@@ -36,7 +36,7 @@ files:
                             database of table XXX;
 
 XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
-tree_all or rank. Detailed dscription of each table is presented below;
+tree_all or rank. Detailed description of each table is presented below;
 
 To load Taxallnomy database in your local MySQL, go to the path where these files 
 are located and type the following command line:
@@ -61,7 +61,7 @@ all tables. Load only those that meet your needs.
 ### 1) lin table
 This table contains all taxonomic lineages of Taxallnomy  database. 
 From this table, you can query for a taxonomic rank of an organism by  its  taxonomy ID 
-(primary key). Each one of 28 taxonomic ranks are represented in a column of this table. 
+(primary key). Each one of 29 taxonomic ranks are represented in a column of this table. 
 Keep in mind that the content of the taxonomic rank columns is not a taxon name,  but a 
 taxon code used by Taxallnomy (See the section "Taxallnomy taxon code"). The taxon names 
 can be programmatically generated from the taxon code. Use the script "get_lineage.pl"  to 
@@ -126,6 +126,9 @@ Column  | Description
 txid    | Taxon code used by Taxallnomy (primary key)             
 parent  | Taxon code its parent taxon (indexed)                   
 rank    | taxonomic rank of taxon code                            
+name    | name associated to txid
+txid_syn| synonymous txid (only for taxon of type 1)
+name_syn| synonymous name (only for taxon of type 1)
 
 ### 4) tree_all table
 It has the same strucutre as the tree_balanced table. During the 
