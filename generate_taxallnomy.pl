@@ -1370,7 +1370,7 @@ print "  > mysql -u <username> -p < taxallnomy_XXX.sql\n\n";
 print "or in the MySQL environment:\n\n";
 print "  mysql> source taxallnomy_XXX.sql\n\n";
 print "XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
-tree_all or rank. See README for a detailed description of each table.\n\n"
+tree_all or rank. See README for a detailed description of each table.\n\n";
 
 sub getName {
 	my $name2determine = $_[0];
