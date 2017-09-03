@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.4.12
+# Version 1.4.13
 
 ##############################################################################
 #                                                                            #
@@ -58,7 +58,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.4.12";
+my $taxallnomy_version = "1.4.13";
 my $version;
 my $help;
 my $man;
@@ -1084,6 +1084,9 @@ CREATE TABLE `tree_balanced` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
+  `name` varchar(200) NOT NULL,
+  `txid_syn` int(11),
+  `name_syn` varchar(200),
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1111,6 +1114,9 @@ CREATE TABLE `tree_all` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
+  `name` varchar(200) NOT NULL,
+  `txid_syn` int(11),
+  `name_syn` varchar(200),
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1238,7 +1244,14 @@ foreach my $txid(@txid){
 		my $rank2 = $ncbi_all_ranks[$i];
 		
 		my $txidCode2 = $taxallnomyLineage[$i];
-		my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\n";
+		my $name2 = getName($txidCode2);
+		my $txid_syn = "\\N";
+		my $name_syn = "\\N";
+		if ($txidCode2 =~ /(\d+)\.\d{2}1$/){
+			$txid_syn = $1;
+			$name_syn = getName($1);
+		}
+		my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$txid_syn."\t".$name_syn."\n";
 		print TREE $defLine;
 		
 	}
@@ -1267,7 +1280,15 @@ foreach my $txid(@txid){
 			}
 			
 			my $txidCode2 = $taxallnomyLineageNoRank[$i];
-			my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\n";
+			
+			my $name2 = getName($txidCode2);
+			my $txid_syn = "\\N";
+			my $name_syn = "\\N";
+			if ($txidCode2 =~ /(\d+)\.\d{2}1$/){
+				$txid_syn = $1;
+				$name_syn = getName($1);
+			}
+			my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$txid_syn."\t".$name_syn."\n";
 			print TREEUNB $defLine;
 		}
 	}
@@ -1299,21 +1320,8 @@ foreach my $txid(@txid){
 	# data for LINNAME
 	my @taxallnomyLineageName;
 	for(my $i = 0; $i < scalar @taxallnomyLineage; $i++){
-		if ($taxallnomyLineage[$i] =~ /^(\d+)\.(\d{2})(\d)$/){
-			my $txidCode = $1;
-			my $rankCode = $2;
-			my $typeCode = $3;
-			my $name3 = $table[$txidCode][3][0];
-		
-			my $rank = $taxallnomy_ranks_code{"code"}{$rankCode}{"abbrev"}."_";
-			my $code = $typeCode{$typeCode};
-			push(@taxallnomyLineageName, $rank.$code.$name3);
-	
-		} else {
-			my $name3 = $table[$taxallnomyLineage[$i]][3][0];
-			push(@taxallnomyLineageName, $name3);
-		}
-		
+		my $name3 = getName($taxallnomyLineage[$i]);
+		push(@taxallnomyLineageName, $name3);
 	}
 	my $taxallnomyLineageName2 = join("\t", @taxallnomyLineageName);
 	$taxallnomyLineageName2 =~ s/\\/\\\\/g;
@@ -1358,9 +1366,32 @@ system("rm -rf $dir");
 
 print "All done!\n\n";
 print "To load TaxAllnomy database in your MySQL just type the following command line:\n\n";
-print "  > mysql -u <username> -p < taxallnomy.sql\n\n";
+print "  > mysql -u <username> -p < taxallnomy_XXX.sql\n\n";
 print "or in the MySQL environment:\n\n";
-print "  mysql> source taxallnomy.sql\n\n";
+print "  mysql> source taxallnomy_XXX.sql\n\n";
+print "XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
+tree_all or rank. See README for a detailed description of each table.\n\n"
+
+sub getName {
+	my $name2determine = $_[0];
+	my $nameDef;
+	if ($name2determine =~ /^(\d+)\.(\d{2})(\d)$/){
+		my $txidCode = $1;
+		my $rankCode = $2;
+		my $typeCode = $3;
+		my $name3 = $table[$txidCode][3][0];
+		if ($typeCode != 0) {
+			my $rank = $taxallnomy_ranks_code{"code"}{$rankCode}{"abbrev"}."_";
+			my $code = $typeCode{$typeCode};
+			$nameDef = $rank.$code.$name3;
+		} else {
+			$nameDef = $table[$name2determine][3][0];
+		}
+	} else {
+		$nameDef = $table[$name2determine][3][0];
+	}
+	return $nameDef;
+}
 
 sub generate_taxallnomy {
 
