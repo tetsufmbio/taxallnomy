@@ -173,8 +173,8 @@ The Taxallnomy "code" is added to the NCBI taxonomy ID as decimal number  of  th
 digits. For example, in the taxon code 8287.071,  8287  is  the  NCBI  Taxonomy  ID 
 (Sarcopterygii) and 071 is the code added by Taxallnomy algorithm. In the code, the 
 first two digits indicates the taxonomic rank in which it belongs. It goes  through 
-the code "01" to "28", in which the first rank is Superkingdom ("01") and the  last 
-one is Forma ("28"). The third digit indicates how the algorithm created this  node. 
+the code "01" to "29", in which the first rank is Superkingdom ("01") and the  last 
+one is Forma ("29"). The third digit indicates how the algorithm created this  node. 
 This can be done in three ways:
 
   - 1 (type 1) - This taxon is originally unranked on NCBI Taxonomy tree and it was 
