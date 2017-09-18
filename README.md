@@ -121,14 +121,17 @@ This table provides the hierarchical structure of Taxallnomy database.
 
 * tree table content:
 
-Column  | Description
---------|---------------------------------------------------------
-txid    | Taxon code used by Taxallnomy (primary key)             
-parent  | Taxon code its parent taxon (indexed)                   
-rank    | taxonomic rank of taxon code                            
-name    | name associated to txid
-txid_syn| synonymous txid (only for taxon of type 1)
-name_syn| synonymous name (only for taxon of type 1)
+Column         | Description
+---------------|---------------------------------------------------------
+txid           | Taxon code used by Taxallnomy (primary key)             
+parent         | Taxon code its parent taxon (indexed)                   
+rank           | taxonomic rank of taxon code                            
+name           | name associated to txid
+parent_name    | name associated to txid
+txid_syn       | synonymous txid (only for taxon of type 1)
+name_syn       | synonymous name (only for taxon of type 1)
+parent_syn     | synonymous parent txid (only for taxon of type 1)
+parent_name_syn| synonymous parent name (only for taxon of type 1)
 
 ### 4) tree_all table
 It has the same strucutre as the tree_balanced table. During the 
@@ -207,7 +210,7 @@ their own scientific name to name them.
 You can use the script 'get_lineage.pl' (this script can be found in 
 taxallnomy_script.tar.gz at the Taxallnomy SourceForge page) to programatically 
 retrieve the taxonomic lineage of TaxIDs of interest. To use this script, you
-have to load only the lin and the rank tables to taxallnomy database on MySQL. To 
+have to load only the **lin** and the **rank** tables to taxallnomy database on MySQL. To 
 test if the script is running properly on your system, type the following command:
 
     > perl get_lineage.pl
