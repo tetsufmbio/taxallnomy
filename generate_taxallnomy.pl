@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.4.13
+# Version 1.4.14
 
 ##############################################################################
 #                                                                            #
@@ -48,6 +48,8 @@
 # - script deal with rank update;                                            #
 # - it also generates a tree without deleting unranked nodes without         #
 # candidate ranks;                                                           #
+# - column with synonimous txid, txid_name, parent_txid and parent_name      #
+# included to tree table;                                                    #
 #                                                                            #
 ##############################################################################
 
@@ -58,7 +60,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.4.13";
+my $taxallnomy_version = "1.4.14";
 my $version;
 my $help;
 my $man;
@@ -1085,13 +1087,18 @@ CREATE TABLE `tree_balanced` (
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
   `name` varchar(200) NOT NULL,
+  `parent_name` varchar(200) NOT NULL,
   `txid_syn` int(11),
   `name_syn` varchar(200),
+  `parent_syn` int(11),
+  `parent_name_syn` varchar(200),
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 ALTER TABLE `tree_balanced` ADD INDEX `parent` (`parent`);
+ALTER TABLE `tree_balanced` ADD INDEX `parent_syn` (`parent_syn`);
+ALTER TABLE `tree_balanced` ADD INDEX `txid_syn` (`txid_syn`);
 
 --
 -- Dumping data for table `taxallnomy`
@@ -1115,13 +1122,18 @@ CREATE TABLE `tree_all` (
   `parent`DECIMAL(20,3) NOT NULL,
   `rank` varchar(20) NOT NULL,
   `name` varchar(200) NOT NULL,
+  `parent_name` varchar(200) NOT NULL,
   `txid_syn` int(11),
   `name_syn` varchar(200),
+  `parent_syn` int(11),
+  `parent_name_syn` varchar(200),
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 ALTER TABLE `tree_all` ADD INDEX `parent` (`parent`);
+ALTER TABLE `tree_all` ADD INDEX `parent_syn` (`parent_syn`);
+ALTER TABLE `tree_all` ADD INDEX `txid_syn` (`txid_syn`);
 
 --
 -- Dumping data for table `taxallnomy`
@@ -1213,6 +1225,7 @@ foreach my $txid(@txid){
  		$parent = $table[$species][0];
 		unshift (@lineage, [@{$table[$species]}]);
 	}
+	
 	my ($taxallnomyLineage, $taxallnomyLineageNoRank) = generate_taxallnomy(\@lineage);
 	my @taxallnomyLineage = @$taxallnomyLineage;
 
@@ -1245,13 +1258,20 @@ foreach my $txid(@txid){
 		
 		my $txidCode2 = $taxallnomyLineage[$i];
 		my $name2 = getName($txidCode2);
+		my $parent_name = getName($parent2);
 		my $txid_syn = "\\N";
 		my $name_syn = "\\N";
+		my $parent_syn = "\\N";
+		my $parent_syn_name = "\\N";
 		if ($txidCode2 =~ /(\d+)\.\d{2}1$/){
 			$txid_syn = $1;
 			$name_syn = getName($1);
 		}
-		my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$txid_syn."\t".$name_syn."\n";
+		if ($parent2 =~ /(\d+)\.\d{2}1$/){
+			$parent_syn = $1;
+			$parent_syn_name = getName($parent_syn);
+		}
+		my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$parent_name."\t".$txid_syn."\t".$name_syn."\t".$parent_syn."\t".$parent_syn_name."\n";
 		print TREE $defLine;
 		
 	}
@@ -1259,17 +1279,12 @@ foreach my $txid(@txid){
 	my @taxallnomyLineageNoRank = @$taxallnomyLineageNoRank;
 
 	if ($leaf){
-		for(my $i = scalar @taxallnomyLineageNoRank - 1; $i >= 0; $i--){
+		for(my $i = scalar @taxallnomyLineageNoRank - 1; $i > 0; $i--){
 			next if (exists $taxallnomy_treeNoRank{$taxallnomyLineageNoRank[$i]});
 			$taxallnomy_treeNoRank{$taxallnomyLineageNoRank[$i]} = 1;
-			# parent
+			
 			my $parent2;
-			if ($i - 1 >= 0){
-				$parent2 = $taxallnomyLineageNoRank[$i - 1];
-			} else {
-				$parent2 = 1;
-			}
-			# rank
+			$parent2 = $taxallnomyLineageNoRank[$i - 1];
 			my $rank2;
 			if ($taxallnomyLineageNoRank[$i] =~ /\.(\d{2})(\d)$/){
 				my $rankCode = $1;
@@ -1279,16 +1294,22 @@ foreach my $txid(@txid){
 				$rank2 = $table[$taxallnomyLineageNoRank[$i]][8];
 			}
 			
-			my $txidCode2 = $taxallnomyLineageNoRank[$i];
-			
+			my $txidCode2 = $taxallnomyLineageNoRank[$i];			
 			my $name2 = getName($txidCode2);
+			my $parent_name = getName($parent2);
 			my $txid_syn = "\\N";
 			my $name_syn = "\\N";
+			my $parent_syn = "\\N";
+			my $parent_syn_name = "\\N";
 			if ($txidCode2 =~ /(\d+)\.\d{2}1$/){
 				$txid_syn = $1;
 				$name_syn = getName($1);
 			}
-			my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$txid_syn."\t".$name_syn."\n";
+			if ($parent2 =~ /(\d+)\.\d{2}1$/){
+				$parent_syn = $1;
+				$parent_syn_name = getName($parent_syn);
+			}
+			my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$parent_name."\t".$txid_syn."\t".$name_syn."\t".$parent_syn."\t".$parent_syn_name."\n";
 			print TREEUNB $defLine;
 		}
 	}
@@ -1410,14 +1431,14 @@ sub generate_taxallnomy {
 	}
 	my $m = 0;
 	my @lineageTaxAllnomy;
-	my @lineageTaxAllnomyUnbalanced;
-	my %lineageTaxAllnomyUnbalanced;
+	my %txidInTaxAllnomy;
 	for (my $i = 0; $i < scalar @ncbi_all_ranks; $i++){
 		if (exists $lineageExRank{$ncbi_all_ranks[$i]}){ # ranked taxon
 			$m = $lineageExRank{$ncbi_all_ranks[$i]};
 			push (@lineageTaxAllnomy, $lineageEx{$m}{"name"});
-			push (@lineageTaxAllnomyUnbalanced, $lineageEx{$m}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}});
-			$lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}} = 1;
+			$txidInTaxAllnomy{$lineageEx{$m}{"name"}} = 1;
+			#push (@lineageTaxAllnomyUnbalanced, $lineageEx{$m}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}});
+			#$lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}} = 1;
 			
 		} else { # unranked taxon
 			my $l = $m;
@@ -1453,11 +1474,13 @@ sub generate_taxallnomy {
 							last;
 						} else {
 							$l++;
+							#push (@lineageTaxAllnomyUnbalanced, $lineageEx{$l}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}});
+							#$lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}} = 1;
 						}
 					} else {
 						$l++;
-						push (@lineageTaxAllnomyUnbalanced, $lineageEx{$l}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}});
-						$lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}} = 1;
+						#push (@lineageTaxAllnomyUnbalanced, $lineageEx{$l}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}});
+						#$lineageTaxAllnomyUnbalanced{$lineageEx{$l}{"name"}} = 1;
 					}
 				}
 			}
@@ -1466,11 +1489,35 @@ sub generate_taxallnomy {
 			}
 			$append += $taxAllnomy_ranks{$ncbi_all_ranks[$i]};
 			$append += $lineageEx{$l}{"name"};
+			
 			push (@lineageTaxAllnomy, $append);
-			push (@lineageTaxAllnomyUnbalanced, $append) if (!exists $lineageTaxAllnomyUnbalanced{$append});
-			$lineageTaxAllnomyUnbalanced{$append} = 1;
+			$txidInTaxAllnomy{$lineageEx{$l}{"name"}} = 1;
+			#push (@lineageTaxAllnomyUnbalanced, $append) if (!exists $lineageTaxAllnomyUnbalanced{$append});
+			#$lineageTaxAllnomyUnbalanced{$append} = 1;
 		}
 	}
-		
+	
+	my @lineageTaxAllnomyUnbalanced;
+	my %lineageTaxAllnomyUnbalanced;
+	
+	my $j = 0;
+	for(my $i = 0; $i < scalar @or_lineage; $i++){
+		my $txid = $or_lineage[$i][4];
+		if (exists $txidInTaxAllnomy{$txid}){
+			for(my $k = $j; $k < scalar @lineageTaxAllnomy; $k++){
+				my $txidCode = $lineageTaxAllnomy[$k];
+				$txidCode =~ s/\.\d+$//;
+				if ($txid eq $txidCode){
+					push(@lineageTaxAllnomyUnbalanced, $lineageTaxAllnomy[$k]);
+				} else {
+					$j = $k;
+					last;
+				}
+			}
+		} else {
+			push(@lineageTaxAllnomyUnbalanced, $txid);
+		}
+	}
+	
 	return (\@lineageTaxAllnomy, \@lineageTaxAllnomyUnbalanced);
 }
