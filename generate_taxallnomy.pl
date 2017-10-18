@@ -92,7 +92,7 @@ if($local_dump){
 	if (-e $local_dump){
 		system("cp $local_dump $dir");
 		chdir $dir;
-		system("tar -zxf $local_dump");
+		system("tar -zxf taxdump.tar.gz");
 	} else {
 		die "ERROR: Can't find the taxdump.tar.gz";
 	}
