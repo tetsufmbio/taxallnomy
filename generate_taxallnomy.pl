@@ -322,7 +322,7 @@ while (scalar(keys %hash_stem2) > 0){
 	
 		my %hash_countRank3;
 		foreach my $rank3(@rank3){
-			$hash_countRank3{$rank3} = scalar(keys $rankCount{"distinct"}{$rank3});
+			$hash_countRank3{$rank3} = scalar(keys %{$rankCount{"distinct"}{$rank3}});
 		}
 		print "NOTE: the order of these ranks could not be precisely determined: ".join(",", @rank3).". Stablished order is:\n";
 		foreach my $rank3(sort {$hash_countRank3{$a} <=> $hash_countRank3{$b}} keys %hash_countRank3){
