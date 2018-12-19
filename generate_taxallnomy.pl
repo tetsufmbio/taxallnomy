@@ -1318,7 +1318,7 @@ foreach my $txid(@txid){
 	my $comname2;
 	
 	if (!$table[$txid][3][1] and !$table[$txid][3][2]){
-		$comname2 = "NULL";
+		$comname2 = "\\N";
 	} else {
 		if ($table[$txid][3][1]){
 			$comname2 = $table[$txid][3][1];
