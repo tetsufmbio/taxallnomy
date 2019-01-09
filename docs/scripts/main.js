@@ -46,7 +46,7 @@ $(document).ready(function(){
 		if (input == ""){
 			alert("Sorry, no input was provided. Please enter a valid input.");
 		} else {
-			var url = "http://maxixe.icb.ufmg.br/taxallnomy/cgi-bin/taxallnomy_getLineage.pl?txid=";
+			var url = "./cgi-bin/taxallnomy_getLineage.pl?txid=";
 			var txidList = input.split(",");
 			while(txidList.length > 0){
 				var end = 100;
@@ -114,7 +114,7 @@ $(document).ready(function(){
 		if(/[^0-9,]/.test(txidIn)){
 			alert("Sorry, there is special characters in your input. Use only numbers and line breaks.");
 		} else {
-			var url = "http://maxixe.icb.ufmg.br/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=";
+			var url = "./cgi-bin/taxallnomy_multi.pl?txid=";
 			formatIn = '&format='+formatIn;
 			rankIn = '&rank=custom&srank='+rank;
 			var win = window.open(url+txidIn+formatIn+rankIn, '_blank');
@@ -299,7 +299,7 @@ function downloadTree(format){
 }
 
 function addRandom(){
-	var url = "http://maxixe.icb.ufmg.br/taxallnomy/cgi-bin/taxallnomy_getLineage.pl?rand=1";
+	var url = "./cgi-bin/taxallnomy_getLineage.pl?rand=1";
 			$.ajax({
 				url: url,
 			}).done(function (result){			
@@ -927,7 +927,7 @@ function dblclick(d) {
 				var txidQuery2 = txid.splice(0,100);
 				var txidQuery = txidQuery2.join();
 				$.ajax({
-					url: "http://maxixe.icb.ufmg.br/taxallnomy/cgi-bin/taxallnomy_getChildren.pl?txid=" + txidQuery,
+					url: "./cgi-bin/taxallnomy_getChildren.pl?txid=" + txidQuery,
 				}).done(function (result){
 					getchildrenDone(result, countGet)
 				});	
