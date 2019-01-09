@@ -1,18 +1,4 @@
-$( "#treeEditionForm" ).change(function( event ) {
-	fontSize = $( "input#fontSizeValueIn" ).val();
-	treeBranchSizeX = $( "input#nodeDistXValueIn" ).val() * 10;
-	treeBranchSizeY = $( "input#nodeDistYValueIn" ).val() / 10;
-	textAngle = $( "input#textAngleValueIn" ).val();
-	//linkDistanceValue = $( "input#linkValueIn" ).val();
-		
-	//chargeValue = $( "input#chargeValueIn" ).val()*(-1);
-	
-	update(root);
-	return false;
-});
-$('#unclassValueIn').change(function (){
-	toggleUnclassified();
-});
+// ************** Load taxallnomy info *****************
 
 var jsonData;
 $.ajax({
@@ -29,48 +15,49 @@ var date = jsonData.date;
 $("#lastUpdate").text(date);
 var rankData = jsonData.rank;
 console.log(jsonData);
+
+// ************** Add usage of taxallnomy api  *****************
 $("#api").append("<li>http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl</li>");
 $("#apiSamples").append("<li><a href=\"./cgi-bin/taxallnomy_multi.pl?txid=9606\" target=\"_blank\">http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=9606</a></li>");
 $("#apiSamples").append("<li><a href=\"./cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=main&format=json\" target=\"_blank\">http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=main&format=json</a></li>");
 $("#apiSamples").append("<li><a href=\"./cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=custom&srank=superkingdom,family,species_group,species\" target=\"_blank\">http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=custom&srank=superkingdom,family,species_group,species</a></li>");
 
 $(document).ready(function(){
-  $("form#myForm").submit(function() {
-	var txidIn = $('#txidInput').val();
-	txidIn = txidIn.replace(/[ \r\t\n;:]/g, ",");
-	if(/[^0-9,]/.test(txidIn)){
-		alert("Sorry, there is special characters in your input. Use only numbers and comma.");
-	} else {
-		var input =  txidIn.replace(/,+/g, ",");
-		input = input.replace(/,$/, "");
-		if (input == ""){
-			alert("Sorry, no input was provided. Please enter a valid input.");
+	$("form#myForm").submit(function() {
+		var txidIn = $('#txidInput').val();
+		txidIn = txidIn.replace(/[ \r\t\n;:]/g, ",");
+		if(/[^0-9,]/.test(txidIn)){
+			alert("Sorry, there is special characters in your input. Use only numbers and comma.");
 		} else {
-			var url = "./cgi-bin/taxallnomy_getLineage.pl?txid=";
-			var txidList = input.split(",");
-			while(txidList.length > 0){
-				var end = 100;
-				if (txidList.length < 100){
-					end = txidList.length;
+			var input =  txidIn.replace(/,+/g, ",");
+			input = input.replace(/,$/, "");
+			if (input == ""){
+				alert("Sorry, no input was provided. Please enter a valid input.");
+			} else {
+				var url = "./cgi-bin/taxallnomy_getLineage.pl?txid=";
+				var txidList = input.split(",");
+				while(txidList.length > 0){
+					var end = 100;
+					if (txidList.length < 100){
+						end = txidList.length;
+					}
+					var txidListPart = txidList.splice(0, end);
+					var txidListString = txidListPart.join();
+					$.ajax({
+						url: url+txidListString,
+					}).done(function (result){
+						$('#txidInput').val("");
+						includeData(result);
+						update(root);
+					});
 				}
-				var txidListPart = txidList.splice(0, end);
-				var txidListString = txidListPart.join();
-				$.ajax({
-					url: url+txidListString,
-				}).done(function (result){
-					$('#txidInput').val("");
-					includeData(result);
-					update(root);
-				});
+				
 			}
-			
 		}
-	}
-	return false;
-  });
+		return false;
+	});
   
 	$("form#download").submit(function() {
-	
 		var formatIn = $('input[name=format]:checked').val();
 		
 		if (formatIn == "svg" || formatIn == "png"){
@@ -126,7 +113,25 @@ $(document).ready(function(){
 	$('input[type=radio][name=rank]').change(function() {
 		changeRank($(this).val());
 	});
-  
+
+	// take changes on tree edition form
+	$( "#treeEditionForm" ).change(function( event ) {
+		fontSize = $( "input#fontSizeValueIn" ).val();
+		treeBranchSizeX = $( "input#nodeDistXValueIn" ).val() / 10;
+		treeBranchSizeY = $( "input#nodeDistYValueIn" ).val() / 10;
+		textAngle = $( "input#textAngleValueIn" ).val();
+		//linkDistanceValue = $( "input#linkValueIn" ).val();
+			
+		//chargeValue = $( "input#chargeValueIn" ).val()*(-1);
+		
+		update(root);
+		return false;
+	});
+
+	$('#unclassValueIn').change(function (){
+		toggleUnclassified();
+	});
+ 
 });
 
 var fontSize = 12; // font size;
@@ -472,6 +477,7 @@ function changeRank(type){
 	update(root);
 	return false;
 }
+
 // ************** Generate the buttom panel *****************
 
 var buttons = {};
@@ -547,92 +553,6 @@ function toggleCollapse(d){
 	updateButtonTest(buttons);
 	
 }
-
-// ************** Generate graphs *****************
-
-dataLine = [];
-dataStack = [];
-ranks = [];
-for(var rank in rankData){
-	var order = rankData[rank].order;
-	dataLine[order - 1] = [];
-	dataStack[order - 1] = [];
-	ranks[order - 1] = rank;
-	dataStack[order - 1].rank = rank;
-	dataStack[order - 1].count_ncbi = Number(rankData[rank].count_ncbi);
-	dataStack[order - 1].count_type1 = Number(rankData[rank].count_type1);
-	dataStack[order - 1].count_type2 = Number(rankData[rank].count_type2);
-	dataStack[order - 1].count_type3 = Number(rankData[rank].count_type3);
-	
-	dataLine[order - 1].rank = rank;
-	dataLine[order - 1].dcount_ncbi = Number(rankData[rank].dcount_ncbi);
-	dataLine[order - 1].dcount_taxallnomy = Number(rankData[rank].dcount_ncbi);
-	dataLine[order - 1].dcount_taxallnomy += Number(rankData[rank].dcount_type1);
-	dataLine[order - 1].dcount_taxallnomy += Number(rankData[rank].dcount_type2);
-	dataLine[order - 1].dcount_taxallnomy += Number(rankData[rank].dcount_type3);
-}
-console.log(dataLine);
-// based on http://bl.ocks.org/d3noob/13a36f70a4f060b97e41
-
-// Set the dimensions of the canvas / graph
-var margin2 = {top: 30, right: 30, bottom: 30, left: 100},
-	width = 600 - margin2.left - margin2.right,
-	height = 370 - margin2.top - margin2.bottom;
-
-// Set the ranges
-var x = d3.scale.ordinal().rangePoints([0, width]);
-var y = d3.scale.log().range([height, 0]);
-
-// Define the axes
-var xAxis = d3.svg.axis().scale(x)
-	.orient("bottom").ticks(5);
-
-var yAxis = d3.svg.axis().scale(y)
-	.orient("left").ticks(5);
-
-// Define the line
-var valueline = d3.svg.line()
-	.x(function(d) { return x(d.rank); })
-	.y(function(d) { return y(d.dcount_ncbi); });
-	
-// Adds the svg canvas
-var svg = d3.select("#numbersLine")
-//	.attr("width", width + margin2.left + margin2.right)
-//	.attr("height", height + margin2.top + margin2.bottom)
-	.append("g")
-		.attr("transform", 
-			  "translate(" + margin2.left + "," + margin2.top + ")");
-
-// Scale the range of the data
-x.domain(ranks);
-y.domain([1, d3.max(dataLine, function(d) { return d.dcount_ncbi; })]);
-
-// Add the valueline path.
-svg.append("path")
-	.attr("fill", "none")
-	.attr("stroke", "steelblue")
-	.attr("stroke-linejoin", "round")
-	.attr("stroke-linecap", "round")
-	.attr("stroke-width", 1.5)
-	.attr("d", valueline(dataLine));
-
-// Add the X Axis
-svg.append("g")
-	.attr("class", "x axis")
-	.attr("transform", "translate(0," + height + ")")
-	.call(xAxis)
-  .selectAll("text")
-	.attr("y", 0)
-	.attr("x", 9)
-	.attr("dy", ".35em")
-	.attr("transform", "rotate(70)")
-	.style("text-anchor", "start");
-	
-// Add the Y Axis
-svg.append("g")
-	.attr("class", "y axis")
-	.call(yAxis);
-
 
 // ************** Generate the tree diagram	 *****************
 
