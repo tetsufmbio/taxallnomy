@@ -17,10 +17,45 @@ var rankData = jsonData.rank;
 console.log(jsonData);
 
 // ************** Add usage of taxallnomy api  *****************
+
 $("#api").append("<li>http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl</li>");
 $("#apiSamples").append("<li><a href=\"./cgi-bin/taxallnomy_multi.pl?txid=9606\" target=\"_blank\">http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=9606</a></li>");
 $("#apiSamples").append("<li><a href=\"./cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=main&format=json\" target=\"_blank\">http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=main&format=json</a></li>");
 $("#apiSamples").append("<li><a href=\"./cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=custom&srank=superkingdom,family,species_group,species\" target=\"_blank\">http://"+location.host+"/taxallnomy/cgi-bin/taxallnomy_multi.pl?txid=9606,9595,10090&rank=custom&srank=superkingdom,family,species_group,species</a></li>");
+
+// ************** Generate the buttom panel *****************
+
+var buttons = {};
+buttons.nodes = [];
+/*var rankType = {
+	"main":   [1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+	"common": [1,1,0,0,1,1,1,1,1,0,1,1,1,0,0,1,1,1,1,0,1,0,0,0,1,0,0,0]
+}*/
+var mainRanks = {"superkingdom":1,"phylum":1,"class":1,"order":1,"family":1,"genus":1,"species":1};
+var commonRanks = {"superkingdom":1,"kingdom":1,"phylum":1,"subphylum":1,"class":1,"superclass":1,"subclass":1,"order":1,"superorder":1,"suborder":1,"family":1,"superfamily":1,"subfamily":1,"genus":1,"subgenus":1,"species":1,"subspecies":1};
+var rankType = {};
+rankType.main = [];
+rankType.common = [];
+for (var rank in rankData){
+	buttons.nodes[rankData[rank].order - 1] = {};
+	buttons.nodes[rankData[rank].order - 1].label = rankData[rank].abbrev;
+	buttons.nodes[rankData[rank].order - 1].name = rankData[rank].name;
+	buttons.nodes[rankData[rank].order - 1].rank = rankData[rank].order;
+	if (rankData[rank].name in mainRanks){
+		rankType.main[rankData[rank].order - 1] = 1;
+	} else {
+		rankType.main[rankData[rank].order - 1] = 0;
+	}
+	if (rankData[rank].name in commonRanks){
+		rankType.common[rankData[rank].order - 1] = 1;
+		buttons.nodes[rankData[rank].order - 1].switch = 1;
+	} else {
+		rankType.common[rankData[rank].order - 1] = 0;
+		buttons.nodes[rankData[rank].order - 1].switch = 0;
+	}
+}
+
+// ************** Take data from form when ready *****************
 
 $(document).ready(function(){
 	$("form#myForm").submit(function() {
@@ -476,38 +511,6 @@ function changeRank(type){
 	}
 	update(root);
 	return false;
-}
-
-// ************** Generate the buttom panel *****************
-
-var buttons = {};
-buttons.nodes = [];
-/*var rankType = {
-	"main":   [1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-	"common": [1,1,0,0,1,1,1,1,1,0,1,1,1,0,0,1,1,1,1,0,1,0,0,0,1,0,0,0]
-}*/
-var mainRanks = {"superkingdom":1,"phylum":1,"class":1,"order":1,"family":1,"genus":1,"species":1};
-var commonRanks = {"superkingdom":1,"kingdom":1,"phylum":1,"subphylum":1,"class":1,"superclass":1,"subclass":1,"order":1,"superorder":1,"suborder":1,"family":1,"superfamily":1,"subfamily":1,"genus":1,"subgenus":1,"species":1,"subspecies":1};
-var rankType = {};
-rankType.main = [];
-rankType.common = [];
-for (var rank in rankData){
-	buttons.nodes[rankData[rank].order - 1] = {};
-	buttons.nodes[rankData[rank].order - 1].label = rankData[rank].abbrev;
-	buttons.nodes[rankData[rank].order - 1].name = rankData[rank].name;
-	buttons.nodes[rankData[rank].order - 1].rank = rankData[rank].order;
-	if (rankData[rank].name in mainRanks){
-		rankType.main[rankData[rank].order - 1] = 1;
-	} else {
-		rankType.main[rankData[rank].order - 1] = 0;
-	}
-	if (rankData[rank].name in commonRanks){
-		rankType.common[rankData[rank].order - 1] = 1;
-		buttons.nodes[rankData[rank].order - 1].switch = 1;
-	} else {
-		rankType.common[rankData[rank].order - 1] = 0;
-		buttons.nodes[rankData[rank].order - 1].switch = 0;
-	}
 }
 
 function changeRankRadio(){
