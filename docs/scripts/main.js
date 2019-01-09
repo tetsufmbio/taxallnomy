@@ -510,8 +510,6 @@ for (var rank in rankData){
 	}
 }
 
-var radius = 20;
-
 function changeRankRadio(){
 	$('input[name=rank]').prop('checked', false);
 }
