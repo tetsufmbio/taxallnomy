@@ -320,7 +320,7 @@ while (scalar(keys %hash_stem2) > 0){
 		delete $stemOrder{$rank3[0]};
 	} elsif (scalar(@rank3) == 0){
 		
-		die "ERROR: Probably there is an error in the taxonomic tree. A node with a rank higher than its ascendant noded maybe.\n";
+		die "ERROR: Probably there is an error in the taxonomic tree. A node with a rank higher than its ascendant nodes maybe.\n";
 		
 	} else {
 	
