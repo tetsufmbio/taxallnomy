@@ -14,7 +14,7 @@ In this package you will find the following files/folder.
     * lib/                  - lib folder containing a PERL module required by the 
                               script 'get_lineage.pl'.
     
-All scripts were developed to be executed in a UNIX environment.
+All scripts were developed with Perl and to be executed in a UNIX environment.
 
 
 ##  Installing database    
@@ -38,7 +38,7 @@ files:
 XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
 tree_all or rank. Detailed description of each table is presented below;
 
-To load Taxallnomy database in your local MySQL, go to the path where these files 
+To load one of those tables in your local MySQL, go to the path where these files 
 are located and type the following command line:
 
     > mysql -u <username> -p < taxallnomy_XXX.sql
@@ -108,8 +108,8 @@ unclassified    | 1 if txid is part of unclassified group*
 merged          | 1 if this txid was merged to another txid       
 rank            | taxonomic rank of txid in the original database 
 
-\* includes txid in unpublished/unidentified/unclassified/environmental/unassigned/
-  incertae sedis/other sequences groups.
+\* includes txid which has "unpublished", "unidentified", "unclassified", "environmental", "unassigned", 
+  "incertae sedis" or "other sequences" in its name.
 
 ### 2) lin_name table
 Same as lin table, but instead of having taxon codes on each taxonomic rank
@@ -134,12 +134,10 @@ parent_syn     | synonymous parent txid (only for taxon of type 1)
 parent_name_syn| synonymous parent name (only for taxon of type 1)
 
 ### 4) tree_all table
-It has the same strucutre as the tree_balanced table. During the 
-generation of the taxallnomy database, some taxa are deleted from the tree to make 
-the taxonomic tree balanced. The deleted taxa are unranked nodes in which no taxonomic 
-ranks can be assigned to them. These nodes are not present in the hierarchical 
-structure stored in tree table, while, in this table, they are preserved. Be aware that 
-the hierarchical strucuture on this table, differently to the tree_balanced table, is not balanced.
+It has the same structure as the tree_balanced table. In this tree, no rank
+taxa that were deleted during the generation of the taxallnomy database 
+(because no ranks could be assigned on it), are preserved.
+Thus, be aware that the hierarchical strucuture on this table is not balanced.
 
 ### 5) rank table
 A table containing some information about the taxonomic ranks comprising
