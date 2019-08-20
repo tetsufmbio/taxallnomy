@@ -14,13 +14,13 @@ In this package you will find the following files/folder.
     * lib/                  - lib folder containing a PERL module required by the 
                               script 'get_lineage.pl'.
     
-All scripts were developed with Perl and to be executed in a UNIX environment.
+All scripts were developed with Perl and tested in a UNIX environment.
 
 
 ##  Installing database    
 
 
-The script generate_taxallnomy.pl generates all necessary file to load the Taxallnomy
+The script *generate_taxallnomy.pl* generates all necessary file to load the Taxallnomy
 database in a local MySQL. The execution of this script requires internet  connection. 
 To run the script, just type in a UNIX terminal the following command:
 
@@ -36,7 +36,7 @@ files:
                             database of table XXX;
 
 XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
-tree_all or rank. Detailed description of each table is presented below;
+tree_original, tree_all, tax_data or rank. Detailed description of each table is presented below;
 
 To load one of those tables in your local MySQL, go to the path where these files 
 are located and type the following command line:
@@ -60,12 +60,12 @@ all tables. Load only those that meet your needs.
 
 ### 1) lin table
 This table contains all taxonomic lineages of Taxallnomy  database. 
-From this table, you can query for a taxonomic rank of an organism by  its  taxonomy ID 
-(primary key). Each one of 29 taxonomic ranks are represented in a column of this table. 
+From this table, you can query for the taxonomic lineage of an organism by  its  taxonomy ID 
+(primary key). Each taxonomic ranks are represented in a column of this table. 
 Keep in mind that the content of the taxonomic rank columns is not a taxon name,  but a 
 taxon code used by Taxallnomy (See the section "Taxallnomy taxon code"). The taxon names 
-can be programmatically generated from the taxon code. Use the script "get_lineage.pl"  to 
-retrieve lineages with taxon name.
+can be programmatically generated from the taxon code or by querying on table lin_name. 
+You can also use the script "get_lineage.pl" to retrieve lineages with taxon name from this table.
 
 * lin table content:
 
@@ -101,15 +101,6 @@ species         | Taxon code for Species rank
 subspecies      | Taxon code for Subspecies rank                  
 varietas        | Taxon code for Varietas rank                    
 forma           | Taxon code for Forma rank                       
-name            | Scientific name of txid                         
-comname         | Common name of txid                             
-leaf            | 1 if txid is a leaf taxon                       
-unclassified    | 1 if txid is part of unclassified group*        
-merged          | 1 if this txid was merged to another txid       
-rank            | taxonomic rank of txid in the original database 
-
-\* includes txid which has "unpublished", "unidentified", "unclassified", "environmental", "unassigned", 
-  "incertae sedis" or "other sequences" in its name.
 
 ### 2) lin_name table
 Same as lin table, but instead of having taxon codes on each taxonomic rank
@@ -117,7 +108,7 @@ column, it contains taxon name. This table occupies more space than the lin tabl
 Contents of this table could be retrieved using script get_lineage.pl (see below).
 
 ### 3) tree_balanced table
-This table provides the hierarchical structure of Taxallnomy database.
+This table provides the balanced hierarchical structure of Taxallnomy database.
 
 * tree table content:
 
@@ -125,13 +116,6 @@ Column         | Description
 ---------------|---------------------------------------------------------
 txid           | Taxon code used by Taxallnomy (primary key)             
 parent         | Taxon code its parent taxon (indexed)                   
-rank           | taxonomic rank of taxon code                            
-name           | name associated to txid
-parent_name    | name associated to txid
-txid_syn       | synonymous txid (only for taxon of type 1)
-name_syn       | synonymous name (only for taxon of type 1)
-parent_syn     | synonymous parent txid (only for taxon of type 1)
-parent_name_syn| synonymous parent name (only for taxon of type 1)
 
 ### 4) tree_all table
 It has the same structure as the tree_balanced table. In this tree, no rank
@@ -139,7 +123,29 @@ taxa that were deleted during the generation of the taxallnomy database
 (because no ranks could be assigned on it), are preserved.
 Thus, be aware that the hierarchical strucuture on this table is not balanced.
 
-### 5) rank table
+### 5) tree_original table
+It has the same structure as the tree_balanced table and the same
+hierarchical structure as the original database from NCBI Taxonomy.
+
+### 6) tax_data table
+This table provides information about each txid comprising the tree. 
+
+Column          | Description
+----------------|---------------------------------------------------------------------
+txid            | NCBI taxonomy ID of a organism (primary key)
+rank            | Taxonomic rank of txid
+rankType        | Specify if the rank on rank column was assigned by taxallnomy (1) or not (0)
+name            | Scientific name of txid                         
+comname         | Common name of txid                             
+unclassified    | 1 if txid is part of unclassified group*, 0 otherwise        
+merged          | Indicates the txid in which this txid was merged
+leaf            | 1 if txid is a leaf taxon, 0 otherwise                       
+
+\* includes txid which has "unpublished", "unidentified", "unclassified", "environmental", "unassigned", 
+  "incertae sedis" or "other sequences" in its name.
+
+
+### 7) rank table
 A table containing some information about the taxonomic ranks comprising
 the database and their frequency among all lineages of leaf taxa. 
 
