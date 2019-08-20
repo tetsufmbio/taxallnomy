@@ -128,13 +128,13 @@ It has the same structure as the tree_balanced table and the same
 hierarchical structure as the original database from NCBI Taxonomy.
 
 ### 6) tax_data table
-This table provides information about each txid comprising the tree. 
+This table provides information about each txid comprising the NCBI Taxonomy. 
 
 Column          | Description
 ----------------|---------------------------------------------------------------------
 txid            | NCBI taxonomy ID of a organism (primary key)
 rank            | Taxonomic rank of txid
-rankType        | Specify if the rank on rank column was assigned by taxallnomy (1) or not (0)
+rankType        | Specify if the rank of a txid was assigned by taxallnomy (1) or not (0)
 name            | Scientific name of txid                         
 comname         | Common name of txid                             
 unclassified    | 1 if txid is part of unclassified group*, 0 otherwise        
