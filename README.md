@@ -213,31 +213,31 @@ their own scientific name to name them.
 
 You can use the script 'get_lineage.pl' to programatically 
 retrieve the taxonomic lineage of TaxIDs of interest. To use this script, you
-have to load only the **lin** and the **rank** tables to taxallnomy database on MySQL. To 
+have to load only the **lin**, **tax_data** and **rank** tables to taxallnomy database on MySQL. To 
 test if the script is running properly on your system, type the following command:
 
     > perl get_lineage.pl
 
 If all goes well, this will show a message like this:
 
+    ERROR Please provide TaxIDs or a file containing a list of TaxIDs.
+	Usage:
+		perl get_lineage.pl -txid 9606,9595
 
-    ERROR Please provide TaxIDs or a file containing a list of TaxIDs.            
-    Usage:                                                                        
-       perl get_lineage.pl -txid 9606,9595                                              
-                                                                                
-       perl get_lineage.pl -file <txid_list_file>                                       
-                                                                                
-       Inputs:                                                                    
-           [-txid set_of_taxids] [-file txids_list_file]                          
-                                                                                
-       Other parameters:                                                          
-           [-rank rank_code] [-srank ranks] [-format format_code] [-user          
-           mysql_user] [-showcode] [-out file_name]                               
-                                                                                
-       Help:                                                                      
-           [-help] [-man]                                                         
-                                                                                
-           Use -man for a detailed help.                                          
+		perl get_lineage.pl -file <txid_list_file>
+
+		Inputs:
+			[-txid set_of_taxids] [-file txids_list_file]
+
+		Other parameters:
+			[-rank rank_code] [-srank ranks] [-format format_code] [-user
+			mysql_user] [-showcode] [-out file_name] [-database database_name]
+			[-linTab table_name] [-taxTab table_name] [-rankTab table_name]
+
+		Help:
+			[-help] [-man]
+
+			Use -man for a detailed help.                                          
                                                                                 
 
 Detailed instruction for running this script can be accessed by typing:

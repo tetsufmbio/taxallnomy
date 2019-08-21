@@ -398,7 +398,7 @@ perl get_lineage.pl -file <txid_list_file>
 	
 =item B<Other parameters>:
 
-[-rank rank_code] [-srank ranks] [-format format_code] [-user mysql_user] [-showcode] [-out file_name] [-database database_name] [-table table_name]
+[-rank rank_code] [-srank ranks] [-format format_code] [-user mysql_user] [-showcode] [-out file_name] [-database database_name] [-linTab table_name] [-taxTab table_name] [-rankTab table_name]
 		
 =item B<Help>:
 
