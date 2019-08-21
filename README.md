@@ -147,7 +147,7 @@ leaf            | 1 if txid is a leaf taxon, 0 otherwise
 
 ### 7) rank table
 A table containing some information about the taxonomic ranks comprising
-the database and their frequency among all lineages of leaf taxa. 
+the database. 
 
 * rank table contents:
 
@@ -173,23 +173,23 @@ count_type3  | number of taxa of type 3 among all lineages of leaf taxa
 
 Taxallnomy primarily uses the Taxonomy ID provided by  NCBI  Taxonomy  database  to 
 identify all nodes comprising its hierarchical structure. However, since Taxallnomy 
-algorithm creates new nodes, we included in the identifier a code to identify  them 
-properly.
+algorithm creates new nodes or assign ranks to existent nodes, we included  in  the 
+identifier a code to identify them properly.
 
 The Taxallnomy "code" is added to the NCBI taxonomy ID as decimal number  of  three 
 digits. For example, in the taxon code 8287.071,  8287  is  the  NCBI  Taxonomy  ID 
 (Sarcopterygii) and 071 is the code added by Taxallnomy algorithm. In the code, the 
 first two digits indicates the taxonomic rank in which it belongs. It goes  through 
-the code "01" to "29", in which the first rank is Superkingdom ("01") and the  last 
-one is Forma ("29"). The third digit indicates how the algorithm created this  node. 
-This can be done in three ways:
+the code "01" to "33", in which the first rank is Superkingdom ("01") and the  last 
+one is Forma ("33"). The third digit indicates the type of node and corresponds  to 
+the action performed by the algorithm on the node. This can be:
 
-  - 1 (type 1) - This taxon is originally unranked on NCBI Taxonomy tree and it was 
+  - 1 (type 1) - This taxon was originally unranked on NCBI Taxonomy tree and it was 
       ranked by Taxallnomy algorithm. 
   - 2 (type 2) - This taxon was created by Taxallnomy algorithm and the name of one 
-      of its descendant taxon was used to name it.
+      of its ranked descendant taxon was used to name it.
   - 3 (type 3) - This taxon was created by Taxallnomy algorithm and the name of one 
-      of its ascendant taxon was used to name it. 
+      of its ranked ascendant taxon was used to name it. 
 
 
 We use the following rules to name the nodes of each type:
@@ -211,8 +211,7 @@ their own scientific name to name them.
 ## Retrieving taxonomic lineage
 
 
-You can use the script 'get_lineage.pl' (this script can be found in 
-taxallnomy_script.tar.gz at the Taxallnomy SourceForge page) to programatically 
+You can use the script 'get_lineage.pl' to programatically 
 retrieve the taxonomic lineage of TaxIDs of interest. To use this script, you
 have to load only the **lin** and the **rank** tables to taxallnomy database on MySQL. To 
 test if the script is running properly on your system, type the following command:
@@ -269,11 +268,11 @@ After the module installations, leave the CPAN environment and test the script.
 If you have any suggestion to improve our work  or  any  question,  feel  free  to 
 contact us by these email addresses: 
 
-  tetsufmbio@gmail.com (PhD. Tetsu Sakamoto) 
+  tetsu@imd.ufrn.br (PhD. Tetsu Sakamoto) 
 
   miguel@icb.ufmg.br (PhD. J. Miguel Ortega)
 
-See also the Taxallnomy website at biodados.icb.ufmg.br/taxallnomy
+See also the Taxallnomy website at bioinfo.icb.ufmg.br/taxallnomy
 
 Laboratorio de Biodados
 Universidade Federal de Minas Gerais (UFMG)
