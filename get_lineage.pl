@@ -34,7 +34,8 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.0
+# Version 1.1
+# compatible with Taxallnomy version 1.5
 
 use FindBin qw($Bin);
 use lib "$Bin/lib/perl5";
@@ -57,9 +58,10 @@ my $outfile = "taxallnomy_result";
 my $help = 0;
 my $man	= 0;
 my $database = "taxallnomy";
-my $table = "lin";
+my $linTable = "lin";
+my $taxTable = "tax_data";
+my $treeTable = "tree_original";
 my $rankTable = "rank";
-my $showranks;
 
 GetOptions(
     'txid=s'	=> \$txid,
@@ -67,13 +69,14 @@ GetOptions(
 	'rank=s'	=> \$rank,
 	'format=s'	=> \$format,
 	'srank=s'	=> \$selectedRank,
-	'showranks!'	=> \$showranks,
 	'showcode!'	=> \$showcode,
 	'user=s'	=> \$userid,
 	'out=s'		=> \$outfile,
 	'database=s'=> \$database,
-	'table=s'	=> \$table,
-	'rankTable=s'	=> \$rankTable,
+	'linTab=s'	=> \$linTable,
+	'rankTab=s'	=> \$rankTable,
+	'taxTab=s'	=> \$taxTable,
+	'treeTab=s'	=> \$treeTable,
 	'help!'		=> \$help,
 	'man!'		=> \$man,
 ) or pod2usage(-verbose => 99, 
@@ -82,47 +85,13 @@ GetOptions(
 pod2usage(0) if $man;
 pod2usage(2) if $help;
 
-if ($showranks){
-	# connect to the database
-	#
-	if(!$userid){
-		print "Type MySQL user that have access to taxallnomy database:\n";
-		chomp($userid = <STDIN>);
-	}
 
-	# get password for mysql
-	print "Type MySQL password for user \'$userid\':\n";
-	my $password = &ReadPassword;	
-	chomp $password;
+my %ncbi_all_ranks = (
+	"no rank" => -1,
+);
 
-	my $wire = Net::Wire10->new(
-		host     => "localhost",
-		user     => $userid,
-		port     => 3306,
-		password => $password,
-		database => $database
-	);
-
-	eval {$wire->connect;};
-	if ($@) {
-		die "\nERROR: Could not connect to mysql database.\n";
-	} else {
-		print "Connected to mysql database.\n";
-	}
-
-	my @ranks;
-	my $resultsRanks = $wire->query("SELECT rank FROM ".$rankTable." ORDER BY ".$rankTable.".order");
-	while (my $row = $resultsRanks->next_array) {
-		my @row = @$row;
-		$row[0] =~ s/ /_/g;
-		push(@ranks, $row[0]);
-		
-	}
-	
-	print "\nValid taxonomic names:\n";
-	print join("\n", @ranks)."\n\n";
-	exit;
-}
+my %taxAllnomy_ranks_code;
+my @ncbi_all_ranks;
 
 my %typeCode = (
 	"1" => "",
@@ -137,10 +106,6 @@ sub error{
 	print $message."\n";
 	pod2usage(2);
 	exit;
-}
-
-if(!$txid && !$txidFile){
-	error("ERROR Please provide TaxIDs or a file containing a list of TaxIDs.");
 }
 
 my %rank_type = (
@@ -162,98 +127,6 @@ my %format_type = (
 
 if (!exists $format_type{$format}){
 	error("ERROR: invalid format provided. Use 'tab', 'json' or 'xml'.");
-}
-
-open (OUT, "> $outfile") or die "ERROR: Could not create the file \'$outfile\'.\n";
-
-# connect to the database
-#
-if(!$userid){
-	print "Type MySQL user that have access to taxallnomy database:\n";
-	chomp($userid = <STDIN>);
-}
-
-# get password for mysql
-print "Type MySQL password for user \'$userid\':\n";
-my $password = &ReadPassword;	
-chomp $password;
-
-my $wire = Net::Wire10->new(
-	host     => "localhost",
-	user     => $userid,
-	port     => 3306,
-	password => $password,
-	database => $database
-);
-
-eval {$wire->connect;};
-if ($@) {
-	die "\nERROR: Could not connect to mysql database.\n";
-} else {
-	print "Connected to mysql database.\n";
-}
-
-my %ncbi_all_ranks = (
-	"no rank" => -1,
-);
-my %taxAllnomy_ranks_code;
-my @ncbi_all_ranks;
-
-my $resultsRanks = $wire->query("SELECT * FROM ".$rankTable." ORDER BY ".$rankTable.".order");
-	while (my $row = $resultsRanks->next_array) {
-		my @row = @$row;
-		$row[0] =~ s/ /_/g;
-		push(@ncbi_all_ranks, $row[0]);
-		$taxAllnomy_ranks_code{$row[3]} = $row[4]."_";
-		$ncbi_all_ranks{$row[0]} = $row[1] - 1;
-	}
-
-my @selectedRank = @ncbi_all_ranks;
-
-if ($rank eq "common"){
-my %commonRanks  = ("superkingdom"=>1,"kingdom"=>1,"phylum"=>1,"subphylum"=>1,"class"=>1,"superclass"=>1,"subclass"=>1,"order"=>1,"superorder"=>1,"suborder"=>1,"family"=>1,"superfamily"=>1,"subfamily"=>1,"genus"=>1,"subgenus"=>1,"species"=>1,"subspecies"=>1);
-	my @newSelectedRanks;
-	foreach my $rank2 (@selectedRank){
-		push(@newSelectedRanks, $rank2) if (exists $commonRanks{$rank2});
-	}
-	@selectedRank = @newSelectedRanks;
-} elsif ($rank eq "main"){
-	my %mainRanks = ("superkingdom"=>1,"phylum"=>1,"class"=>1,"order"=>1,"family"=>1,"genus"=>1,"species"=>1);
-	my @newSelectedRanks;
-	foreach my $rank2 (@selectedRank){
-		push(@newSelectedRanks, $rank2) if (exists $mainRanks{$rank2});
-	}
-	@selectedRank = @newSelectedRanks;
-} elsif ($rank eq "custom"){
-	#my $selectedRank = $cgi->param("srank") if ($cgi->param("srank"));
-	
-	if (!$selectedRank){
-		my $errorMessage = "ERROR: select the ranks to be displayed using srank.\n";
-		$errorMessage .= "Example: -rank custom -srank kingdom,class,family,species\n";
-		$errorMessage .= "Valid ranks are:\n";
-		$errorMessage .= join("\n", @ncbi_all_ranks);	
-		error($errorMessage);
-	} else {
-		$selectedRank =~ s/ |\t//g;
-		$selectedRank = lc $selectedRank;
-		my @selectedRank2 = split(",", $selectedRank);
-		my %selectedRank2;
-		foreach my $srank(@selectedRank2){
-			if(!exists $ncbi_all_ranks{$srank}){
-				my $errorMessage = "ERROR: invalid rank selected: $srank\n";
-				$errorMessage .= "Valid ranks are:\n";
-				$errorMessage .= join("\n", @ncbi_all_ranks);	
-				error($errorMessage);
-			}
-			$selectedRank2{$srank} = ();
-		}
-		@selectedRank = ();
-		foreach my $singlerank(@ncbi_all_ranks){
-			if (exists $selectedRank2{$singlerank}){
-				push(@selectedRank, $singlerank);
-			}
-		}
-	}
 }
 
 my @txid;
@@ -283,12 +156,102 @@ if($txid){
 	if ($control){
 		error("ERROR: Some TaxIDs provided in the file were not validated. Use only numbers and provide one TaxIDs per line.\n");
 	}
+} else {
+	error("ERROR Please provide TaxIDs or a file containing a list of TaxIDs.");
 }
 
 # avoid duplicated txid
 my %txid;
 @txid{@txid} = ();
 @txid = keys %txid;
+
+# connect to the database
+#
+if(!$userid){
+	print "Type MySQL user that have access to taxallnomy database:\n";
+	chomp($userid = <STDIN>);
+}
+
+# get password for mysql
+print "Type MySQL password for user \'$userid\':\n";
+my $password = &ReadPassword;	
+chomp $password;
+
+my $wire = Net::Wire10->new(
+	host     => "localhost",
+	user     => $userid,
+	port     => 3306,
+	password => $password,
+	database => $database
+);
+
+eval {$wire->connect;};
+if ($@) {
+	die "\nERROR: Could not connect to mysql database.\n";
+} else {
+	print "Connected to mysql database.\n";
+}
+
+# retrieve ranks from database
+my $statement3 = "SELECT * FROM ".$rankTable." order by ".$rankTable.".order;";
+my $sth3 = $wire->query($statement3);
+while (my $row = $sth3->next_array) {
+	my @row = @$row;
+	$row[0] =~ s/ /_/g;
+	push(@ncbi_all_ranks, $row[0]);
+	$taxAllnomy_ranks_code{$row[3]} = $row[4]."_";
+	$ncbi_all_ranks{$row[0]} = $row[1] - 1;
+}
+
+my $nRanks = scalar @ncbi_all_ranks;
+my @selectedRank = @ncbi_all_ranks;
+
+if ($rank eq "common"){
+	my %commonRanks  = ("superkingdom"=>1,"kingdom"=>1,"phylum"=>1,"subphylum"=>1,"class"=>1,"superclass"=>1,"subclass"=>1,"order"=>1,"superorder"=>1,"suborder"=>1,"family"=>1,"superfamily"=>1,"subfamily"=>1,"genus"=>1,"subgenus"=>1,"species"=>1,"subspecies"=>1);
+	my @newSelectedRanks;
+	foreach my $rank2 (@selectedRank){
+		push(@newSelectedRanks, $rank2) if (exists $commonRanks{$rank2});
+	}
+	@selectedRank = @newSelectedRanks;
+} elsif ($rank eq "main"){
+	my %mainRanks = ("superkingdom"=>1,"phylum"=>1,"class"=>1,"order"=>1,"family"=>1,"genus"=>1,"species"=>1);
+	my @newSelectedRanks;
+	foreach my $rank2 (@selectedRank){
+		push(@newSelectedRanks, $rank2) if (exists $mainRanks{$rank2});
+	}
+	@selectedRank = @newSelectedRanks;
+} elsif ($rank eq "custom"){
+	
+	if (!$selectedRank){
+		my $errorMessage = "ERROR: select the ranks to be displayed using srank.\n";
+		$errorMessage .= "Example: rank=custom&srank=kingdom,class,family,species\n";
+		$errorMessage .= "Valid ranks are:\n";
+		$errorMessage .= join("\n", @ncbi_all_ranks);	
+		error($errorMessage);
+	} else {
+		$selectedRank =~ s/ |\t//g;
+		$selectedRank = lc $selectedRank;
+		my @selectedRank2 = split(",", $selectedRank);
+		my %selectedRank2;
+		foreach my $srank(@selectedRank2){
+			if(!exists $ncbi_all_ranks{$srank}){
+				my $errorMessage = "ERROR: invalid rank selected: $srank\n";
+				$errorMessage .= "Valid ranks are:\n";
+				$errorMessage .= join("\n", @ncbi_all_ranks);	
+				error($errorMessage);
+			}
+			$selectedRank2{$srank} = ();
+		}
+		@selectedRank = ();
+		foreach my $singlerank(@ncbi_all_ranks){
+			if (exists $selectedRank2{$singlerank}){
+				push(@selectedRank, $singlerank);
+			}
+		}
+	}
+}
+
+open (OUT, "> $outfile") or die "ERROR: Could not create the file \'$outfile\'.\n";
 
 # retrieve txid from database;
 my %hashTax;
@@ -301,7 +264,7 @@ if (scalar @txid > 0){
 		$n = $n + 100;
 		$m = $m + 100;
 		$n = $#txid if ($n > $#txid);
-		my $results = $wire->query("SELECT * FROM ".$table." WHERE txid in (\"".join('","', @txid[$m .. $n])."\")");
+		my $results = $wire->query("SELECT * FROM ".$linTable." AS lin, ".$taxTable." AS data WHERE lin.txid = data.txid and lin.txid in (\"".join('","', @txid[$m .. $n])."\")");
 		while (my $row = $results->next_array) {
 			my @row = @$row;
 			my @ranksTxid;
@@ -313,7 +276,7 @@ if (scalar @txid > 0){
 				$hashTaxAll{$1} = {};
 			}
 			$hashTax{$txid2}{"rank"} = \@ranksTxid;
-			$hashTax{$txid2}{"sciname"} = $row[29];
+			$hashTax{$txid2}{"sciname"} = $row[$nRanks + 2];
 		}
 	} while ($n < $#txid);
 }
@@ -330,7 +293,7 @@ if (!$showcode){
 			$m = $m + 100;
 			$n = $#taxAll if ($n > $#taxAll);
 			
-			my $results = $wire->query("SELECT txid,sciname FROM ".$table." WHERE txid in (\"".join('","', @taxAll[$m .. $n])."\")");
+			my $results = $wire->query("SELECT txid,name FROM ".$taxTable." WHERE txid in (\"".join('","', @taxAll[$m .. $n])."\")");
 			while (my $row = $results->next_array) {
 				my @row = @$row;
 				my $txid2 = $row[0];
@@ -472,12 +435,12 @@ all: retrieves all taxonomic ranks.
 =item B<-srank> <rank_names>
 
 Use this parameter with -rank set to 'custom'. Select the taxonomic ranks that will comprise the 
-taxonomic lineage. Use comma to separate each rank. Valid taxonomic rank names can be consulted 
-using -showranks parameter.
+taxonomic lineage. Use comma to separate each rank. Valid taxonomic rank names are:
 
-=item B<-showranks> 
-
-Show all valid taxonomic rank names to be used in the parameter -srank.
+superkingdom, kingdom, subkingdom, superphylum, phylum, subphylum, superclass, class,
+subclass, infraclass, superorder, order, suborder, infraorder, parvorder, superfamily, 
+family, subfamily, tribe, subtribe, genus, subgenus, species_group, species_subgroup, 
+species, subspecies, varietas, forma.
 
 =item B<-format> <tab|json|xml> Default: tab
 
@@ -499,11 +462,15 @@ Name of the output file.
 
 Name of MySQL database with Taxallnomy data
 
-=item B<-table> <table_name> Default: lin
+=item B<-linTab> <table_name> Default: lin
 
 Name of MySQL table with Taxallnomy lineage data.
 
-=item B<-rankTable> <table_name> Default: rank
+=item B<-taxTab> <table_name> Default: tax_data
+
+Name of MySQL table with Taxallnomy tax data.
+
+=item B<-rankTab> <table_name> Default: rank
 
 Name of MySQL table with Taxallnomy rank data.
 
