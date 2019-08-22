@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.4.14
+# Version 1.5
 
 ##############################################################################
 #                                                                            #
@@ -46,10 +46,9 @@
 # - Verifies if there are unranked nodes with CR <= NP in the path to NA.    #
 # - taxallnomy_lin_name table added.                                         #
 # - script deal with rank update;                                            #
-# - it also generates a tree without deleting unranked nodes without         #
-# candidate ranks;                                                           #
-# - column with synonimous txid, txid_name, parent_txid and parent_name      #
-# included to tree table;                                                    #
+# - taxallnomy_tree_all table included;                                      #
+# - taxallnomy_tree_original included;                                       #
+# - taxallnomy_tax_data included;                                            #
 #                                                                            #
 ##############################################################################
 
@@ -60,7 +59,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.4.14";
+my $taxallnomy_version = "1.5";
 my $version;
 my $help;
 my $man;
@@ -128,21 +127,32 @@ my %ncbi_all_ranks = (
 );
 my $ncbi_all_ranks = \%ncbi_all_ranks;
 my @table;	# table[$txid][0] - parent 
-			# table[$txid][1] - rank (integer)
+			# table[$txid][1] - rank (integer, start from 0) 
 			# table[$txid][2] - [children]
 			# table[$txid][3] - name (0 - scientific name; 1 - genbank common name; 2 - common name)
 			# table[$txid][4] - txid
-			# table[$txid][5] - possibleRanks
+			# table[$txid][5] - possibleRanks (array, ranks start from 0)
 			# table[$txid][6] - could be genus (position 0) or species (position 1)
 			# table[$txid][7] - minRank (position 0) or maxRank (position 1)
 			# table[$txid][8] - rank (text)
+			# table[$txid][9] - 1 if unclassified txid
 
 my @txid;
 my %hash_rank;
+my (%leaf, %parent); # determine leaf txid;
+
 while(my $line = <TXID>){
 	my @line = split(/\t\|\t/, $line);
 	$table[$line[0]][4] = $line[0]; # txid
 	$table[$line[0]][0] = $line[1] if ($line[0] != $line[1]); # parent
+	
+	$parent{$line[1]} = 1;
+	if (!exists $parent{$line[0]}){
+		$leaf{$line[0]} = 1;
+	}
+	if(exists $leaf{$line[1]}){
+		delete $leaf{$line[1]};
+	}
 	
 	#if (!exists $ncbi_all_ranks{$line[2]}){
 	#	die "ERROR: new rank found. Script need update: ".$line[0]." ".$line[2]."\n";
@@ -161,6 +171,7 @@ while(my $line = <TXID>){
 } 
 
 close TXID;
+my @leaf = keys %leaf;
 
 open(TXIDNAME, "< names.dmp") or die "ERROR: Can't open names.dmp"; 
 
@@ -239,16 +250,18 @@ print "  Determining rank order... \n";
 my %rankOrder;
 my %stemOrder;
 my %rankCount;
-for(my $i = 0; $i < scalar @txid; $i++){
-	my $node = $txid[$i];
-	next if ($table[$node][2]);
+my $countUn = 0;
+for(my $i = 0; $i < scalar @leaf; $i++){
+	my $node = $leaf[$i];
+	#next if ($table[$node][2]);
+	#push(@leaf, $node); # store leaf txid
 	my @ranksLineage;
 	my @lineage;
 	my $unclassControl = 0;
 	while ($node != 1){	
 		
-		if($table[$node][3][0] =~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){
-			$unclassControl = 1;
+		if(checkUnclass($table[$node][3][0])){
+			$unclassControl = $node;
 		}
 		if ($table[$node][8] ne "no rank"){
 			unshift(@ranksLineage, $table[$node][8]);			
@@ -258,12 +271,28 @@ for(my $i = 0; $i < scalar @txid; $i++){
 		$node = $table[$node][0] if ($table[$node][0]);
 	}
 	
-	if (scalar @ranksLineage > 1){
+	# annotate unclassified txid
+	if ($unclassControl){
+		$countUn++;
+		if (!$table[$leaf[$i]][9]){
+			$node =  $unclassControl;
+			$table[$node][9] = 1;
+			my @unclassNodes;
+			push(@unclassNodes, @{$table[$node][2]}) if ($table[$node][2]);
+			while (scalar @unclassNodes > 0){
+				$node = shift @unclassNodes;
+				$table[$node][9] = 1;
+				push(@unclassNodes, @{$table[$node][2]}) if ($table[$node][2]);
+			}			
+		}
+	}
+	my %rankExist;
+	if (scalar @ranksLineage > 0){ # changed here
 		for(my $j = 0; $j < scalar @ranksLineage; $j++){
 			# counting all and distinct taxa in each rank
 			$rankCount{"all"}{$ranksLineage[$j]} += 1 if (!$unclassControl);
 			$rankCount{"distinct"}{$ranksLineage[$j]}{$lineage[$j]} = 1 if (!$unclassControl);
-			
+			$rankExist{$ranksLineage[$j]} = 1;
 			for(my $k = $j+1; $k < scalar @ranksLineage; $k++){
 				$rankOrder{$ranksLineage[$j]}{$ranksLineage[$k]} = 1;
 				$stemOrder{$hash_allRankStem{$ranksLineage[$j]}}{$hash_allRankStem{$ranksLineage[$k]}} = 1 if ($hash_allRankStem{$ranksLineage[$j]} ne $hash_allRankStem{$ranksLineage[$k]});
@@ -318,10 +347,6 @@ while (scalar(keys %hash_stem2) > 0){
 		delete $hash_stem2{$rank3[0]};
 		delete $hash_rank2{$rank3[0]};
 		delete $stemOrder{$rank3[0]};
-	} elsif (scalar(@rank3) == 0){
-		
-		die "ERROR: Probably there is an error in the taxonomic tree. A node with a rank higher than its ascendant nodes maybe.\n";
-		
 	} else {
 	
 		my %hash_countRank3;
@@ -467,6 +492,8 @@ close MERGED;
 my @genus2analyse;
 my @species2analyse;
 
+# Determine possible ranks to unranked taxa
+print "  Determining possible ranks to unranked taxa...\n";
 foreach my $rank2analyse(@ncbi_all_ranks){
 	
 	my @nodes2analyse;
@@ -481,6 +508,10 @@ foreach my $rank2analyse(@ncbi_all_ranks){
 		
 			next if ($rank2analyseInt <= $table[$node][1]);
 			push(@nodes2analyse, @{$table[$node][2]}) if ($table[$node][2]);
+			
+		#} elsif (checkUnclass($table[$node][3][0])){ # unclassified taxon, keep it as no rank.
+		
+		#	push(@nodes2analyse, @{$table[$node][2]}) if ($table[$node][2]);
 			
 		} else { # unranked taxon
 			
@@ -534,7 +565,7 @@ foreach my $rank2analyse(@ncbi_all_ranks){
 }
 
 # verify genus
-print "verify genus...\n";
+print "  Verifying genus...\n";
 my (@yesGenus, @noGenus, @yesSpecies, @noSpecies);
 while (scalar @genus2analyse > 0){
 	my $node = shift @genus2analyse;
@@ -547,7 +578,7 @@ while (scalar @genus2analyse > 0){
 		#my $control = 0;
 		my $controlSpecies = 0;
 		my $genusName = $table[$node4][3][0];
-		if($genusName !~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){ # verify if this represents an unclassified or an environmental sample.
+		if(checkUnclass($genusName)){ # verify if this represents an unclassified or an environmental sample.
 			my @nodes2analyse5;	
 			push (@nodes2analyse5, @{$table[$node4][2]}) if $table[$node4][2];
 			while(scalar @nodes2analyse5 > 0){
@@ -615,7 +646,7 @@ while (scalar @genus2analyse > 0){
 }
 
 # verify species
-print "verify species...\n";
+print "  Verifying species...\n";
 while (scalar @species2analyse > 0){
 	my $node = shift @species2analyse;
 	# This node could be a species
@@ -625,7 +656,7 @@ while (scalar @species2analyse > 0){
 	my $genusName;
 	my $control = 0;
 	my $putativeSpeciesName = $table[$node][3][0];
-	if($putativeSpeciesName !~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){ # verify if this represents an unclassified or an environmental sample.
+	if(checkUnclass($putativeSpeciesName)){ # verify if this represents an unclassified or an environmental sample.
 		while(scalar @nodes2analyse4 > 0){
 			my $node2 = shift @nodes2analyse4;
 			if($table[$node2][1] != -1){
@@ -661,7 +692,7 @@ while (scalar @species2analyse > 0){
 			next if ($table[$node4][1] != -1);
 			my $putativeSpeciesName = $table[$node4][3][0];
 			# verify if it is in the group of unclassified
-			if($putativeSpeciesName =~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){ # verify if this represents an unclassified or an environmental sample.
+			if(checkUnclass($putativeSpeciesName)){ # verify if this represents an unclassified or an environmental sample.
 				$table[$node4][6][0] = 0;
 				push(@noSpecies, $table[$node4][3][0]);
 				push (@nodes2analyse6, @{$table[$node4][2]}) if $table[$node4][2];
@@ -775,8 +806,8 @@ sub nodeTest {
 	}
 }
 
-
-
+# Assign rank to unranked taxa
+print "  Assigning rank to unranked taxa...\n";
 my @nodes2analyse3 = @{$table[1][2]};
 while (scalar @nodes2analyse3 != 0){
 	my $node = shift @nodes2analyse3;
@@ -810,7 +841,7 @@ while (scalar @nodes2analyse3 != 0){
 			my $layer2 = shift @layer;
 			#if ($table[$layer2][1] == -1 && !$table[$layer2][6][0] && !$table[$layer2][6][1]){
 			if ($table[$layer2][1] == -1){
-				if($table[$layer2][3][0] !~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){ # verify if this represents an unclassified or an environmental sample.
+				if(checkUnclass($table[$layer2][3][0])){ # verify if this represents an unclassified or an environmental sample.
 					$control = 1;
 					if (exists $table[$layer2][2]){
 						push (@layer2, @{$table[$layer2][2]});
@@ -980,8 +1011,12 @@ open(LINNAME, "> taxallnomy_lin_name.tab") or die;
 open(LINNAMESQL, "> taxallnomy_lin_name.sql") or die;
 open(TREE, "> taxallnomy_tree_balanced.tab") or die;
 open(TREESQL, "> taxallnomy_tree_balanced.sql") or die;
+open(TREEORI, "> taxallnomy_tree_original.tab") or die;
+open(TREEORISQL, "> taxallnomy_tree_original.sql") or die;
 open(TREEUNB, "> taxallnomy_tree_all.tab") or die;
 open(TREEUNBSQL, "> taxallnomy_tree_all.sql") or die;
+open(TAXDATA, "> taxallnomy_tax_data.tab") or die;
+open(TAXDATASQL, "> taxallnomy_tax_data.sql") or die;
 
 my $dumpHead = '
 -- MySQL dump 10.13  Distrib 5.6.25, for Linux (x86_64)
@@ -1027,13 +1062,7 @@ foreach my $rank(@rankOrder){
 	print LINSQL "  `".$rank."` DECIMAL(20,3) NOT NULL,\n"
 }
 
-print LINSQL  '`sciname` varchar(200) NOT NULL,
-  `comname` varchar(200),
-  `leaf` tinyint(1) NOT NULL,
-  `unclassified` tinyint(1) NOT NULL,
-  `merged` tinyint(1) NOT NULL,
-  `rank` varchar(20) NOT NULL,
-  PRIMARY KEY (`txid`)
+print LINSQL  '  PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1060,13 +1089,7 @@ foreach my $rank(@rankOrder){
 	print LINNAMESQL "  `".$rank."` VARCHAR(200) NOT NULL,\n"
 }
 
-print LINNAMESQL  '`sciname` varchar(200) NOT NULL,
-  `comname` varchar(200),
-  `leaf` tinyint(1) NOT NULL,
-  `unclassified` tinyint(1) NOT NULL,
-  `merged` tinyint(1) NOT NULL,
-  `rank` varchar(20) NOT NULL,
-  PRIMARY KEY (`txid`)
+print LINNAMESQL  '  PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1089,20 +1112,11 @@ DROP TABLE IF EXISTS `tree_balanced`;
 CREATE TABLE `tree_balanced` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
-  `rank` varchar(20) NOT NULL,
-  `name` varchar(200) NOT NULL,
-  `parent_name` varchar(200) NOT NULL,
-  `txid_syn` int(11),
-  `name_syn` varchar(200),
-  `parent_syn` int(11),
-  `parent_name_syn` varchar(200),
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 ALTER TABLE `tree_balanced` ADD INDEX `parent` (`parent`);
-ALTER TABLE `tree_balanced` ADD INDEX `parent_syn` (`parent_syn`);
-ALTER TABLE `tree_balanced` ADD INDEX `txid_syn` (`txid_syn`);
 
 --
 -- Dumping data for table `taxallnomy`
@@ -1111,6 +1125,33 @@ ALTER TABLE `tree_balanced` ADD INDEX `txid_syn` (`txid_syn`);
 LOAD DATA LOCAL INFILE \'taxallnomy_tree_balanced.tab\' INTO TABLE tree_balanced;
 
 ';
+
+# sql for tree_original table
+print TREEORISQL $dumpHead.'
+--
+-- Table structure for table `tree_original`
+--
+
+DROP TABLE IF EXISTS `tree_original`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `tree_original` (
+  `txid` int(11) NOT NULL,
+  `parent` int(11) NOT NULL,
+  PRIMARY KEY (`txid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+ALTER TABLE `tree_original` ADD INDEX `parent` (`parent`);
+
+--
+-- Dumping data for table `taxallnomy`
+--
+
+LOAD DATA LOCAL INFILE \'taxallnomy_tree_original.tab\' INTO TABLE tree_original;
+
+';
+
 
 # sql for tree with no candidate rank taxon table
 print TREEUNBSQL $dumpHead.'
@@ -1123,27 +1164,48 @@ DROP TABLE IF EXISTS `tree_all`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `tree_all` (
   `txid` DECIMAL(20,3) NOT NULL,
-  `parent`DECIMAL(20,3) NOT NULL,
-  `rank` varchar(20) NOT NULL,
-  `name` varchar(200) NOT NULL,
-  `parent_name` varchar(200) NOT NULL,
-  `txid_syn` int(11),
-  `name_syn` varchar(200),
-  `parent_syn` int(11),
-  `parent_name_syn` varchar(200),
+  `parent` DECIMAL(20,3) NOT NULL,
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 ALTER TABLE `tree_all` ADD INDEX `parent` (`parent`);
-ALTER TABLE `tree_all` ADD INDEX `parent_syn` (`parent_syn`);
-ALTER TABLE `tree_all` ADD INDEX `txid_syn` (`txid_syn`);
 
 --
 -- Dumping data for table `taxallnomy`
 --
 
 LOAD DATA LOCAL INFILE \'taxallnomy_tree_all.tab\' INTO TABLE tree_all;
+
+';
+
+# sql for tax data
+print TAXDATASQL $dumpHead.'
+--
+-- Table structure for table `tax_data`
+--
+
+DROP TABLE IF EXISTS `tax_data`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `tax_data` (
+  `txid` int(11) NOT NULL,
+  `rank` int(2) NOT NULL,
+  `rank_type` tinyint(1) NOT NULL,
+  `name` varchar(200) NOT NULL,
+  `comname` varchar(200),
+  `unclassified` int(11),
+  `merged` int(11),
+  `leaf` int(11),
+  PRIMARY KEY (`txid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `taxallnomy`
+--
+
+LOAD DATA LOCAL INFILE \'taxallnomy_tax_data.tab\' INTO TABLE tax_data;
 
 ';
 
@@ -1191,177 +1253,195 @@ my %typeCode = (
 );
 
 my %taxallnomy_tree;
-$taxallnomy_tree{1}{"parent"} = 0;
-$taxallnomy_tree{1}{"sciname"} = "root";
-$taxallnomy_tree{1}{"comname"} = "all";
-$taxallnomy_tree{1}{"rank"} = "no rank";
+#$taxallnomy_tree{1}{"parent"} = "\\N";
+#$taxallnomy_tree{1}{"sciname"} = "root";
+#$taxallnomy_tree{1}{"comname"} = "all";
+#$taxallnomy_tree{1}{"rank"} = -1;
 
-my %taxallnomy_treeNoRank;
-$taxallnomy_treeNoRank{1}{"parent"} = 0;
-$taxallnomy_treeNoRank{1}{"sciname"} = "root";
-$taxallnomy_treeNoRank{1}{"comname"} = "all";
-$taxallnomy_treeNoRank{1}{"rank"} = "no rank";
+my %taxallnomy_treeAll;
+#$taxallnomy_treeAll{1}{"parent"} = "\\N";
+#$taxallnomy_treeAll{1}{"sciname"} = "root";
+#$taxallnomy_treeAll{1}{"comname"} = "all";
+#$taxallnomy_treeAll{1}{"rank"} = -1;
+
+#my %taxallnomy_treeNoNode23;
+#$taxallnomy_treeNoNode23{1}{"parent"} = "\\N";
+#$taxallnomy_treeNoNode23{1}{"sciname"} = "root";
+#$taxallnomy_treeNoNode23{1}{"comname"} = "all";
+#$taxallnomy_treeNoNode23{1}{"rank"} = -1;
 
 my @insert;
 my %rankCountType;
 foreach my $rank(@rankOrder){
-	for(my $i = 1; $i < 4; $i++){
+	for(my $i = 0; $i < 4; $i++){
 		$rankCountType{"all"}{$rank}{$i} = 0;
 		$rankCountType{"distinct"}{$rank}{$i} = ();
 	}
 }
-foreach my $txid(@txid){
+
+print TREEUNB "1\t\0\n";
+print TREE "1\t\0\n";
+
+foreach my $txid(@leaf){
 	my @lineage;
 	my $species = $txid;
  	my $rank = $rev_ncbi_all_ranks{$table[$species][1]};
-	my $leaf = 1;
-	$leaf = 0 if ($table[$species][2]);
+	my $leaf = 0;
  	my $sciname = $table[$species][3][0];
  	my $parent = $table[$species][0];
 	
 	unshift (@lineage, [@{$table[$species]}]);
-	my $unclassified = 0;
+	#my $unclassified = 0;
 	while($species != 1){
-		if($table[$species][3][0] =~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){ # verify if this represents an unclassified or an environmental sample.
-			$unclassified = 1;
-		}
+		#if(checkUnclass($table[$species][3][0])){ # verify if this represents an unclassified or an environmental sample.
+		#	$unclassified = 1;
+		#}
 		$species = $parent;
  		$parent = $table[$species][0];
 		unshift (@lineage, [@{$table[$species]}]);
 	}
 	
-	my ($taxallnomyLineage, $taxallnomyLineageNoRank) = generate_taxallnomy(\@lineage);
-	my @taxallnomyLineage = @$taxallnomyLineage;
-
-	for(my $i = scalar @taxallnomyLineage - 1; $i >= 0; $i--){
-		#next if ($taxallnomyLineage[$i] =~ /\.\d{2}3$/);
-		
-		if($leaf and !$unclassified){
-			if ($taxallnomyLineage[$i] =~ /\.(\d{2})(\d)$/){
-				my $rankCode = $1;
-				my $rankType = $2;
-				if ($rankType != 0){
-					$rankCountType{"distinct"}{$taxallnomy_ranks_code{"code"}{$1}{"rank"}}{$2}{$taxallnomyLineage[$i]} = 1;
-					$rankCountType{"all"}{$taxallnomy_ranks_code{"code"}{$1}{"rank"}}{$2} += 1;
+	my $currRank = 1;
+	my @taxallnomyLineage;
+	my @taxallnomyLineageUnb;
+	for(my $i = 0; $i < scalar @lineage; $i++){
+		if ($i == scalar @lineage - 1){
+			$leaf = 1;
+		}
+		if ($lineage[$i][1] != -1){
+			# ranked taxon
+			while($currRank < $lineage[$i][1]+1){
+				my $rankAdd = ($currRank/100)+0.002;
+				my $taxonAdd = $lineage[$i][4] + $rankAdd;
+				push(@taxallnomyLineage, $taxonAdd);
+				push(@taxallnomyLineageUnb, $taxonAdd);
+				$currRank++;
+			}
+			push(@taxallnomyLineage, $lineage[$i][4]);
+			push(@taxallnomyLineageUnb, $lineage[$i][4]);
+			$currRank++;
+			
+		} else {
+			# unranked taxon
+			if ($lineage[$i][5]){
+				# unranked taxon with rank assigned
+				my @possibleRank = @{$lineage[$i][5]};
+				my $possibleRank = $possibleRank[0] + 1;
+				while($currRank < $possibleRank){
+					my $rankAdd = ($currRank/100)+0.002;
+					my $taxonAdd = $lineage[$i][4] + $rankAdd;
+					push(@taxallnomyLineage, $taxonAdd);
+					push(@taxallnomyLineageUnb, $taxonAdd);
+					$currRank++;
 				}
-			}			
-		}
-		
-		next if (exists $taxallnomy_tree{$taxallnomyLineage[$i]});
-		next if (!$leaf);
-		$taxallnomy_tree{$taxallnomyLineage[$i]} = 1;
-		# parent
-		my $parent2;
-		if ($i - 1 >= 0){
-			$parent2 = $taxallnomyLineage[$i - 1];
-		} else {
-			$parent2 = 1;
-		}
-		# rank
-		my $rank2 = $ncbi_all_ranks[$i];
-		
-		my $txidCode2 = $taxallnomyLineage[$i];
-		my $name2 = getName($txidCode2);
-		my $parent_name = getName($parent2);
-		my $txid_syn = "\\N";
-		my $name_syn = "\\N";
-		my $parent_syn = "\\N";
-		my $parent_syn_name = "\\N";
-		if ($txidCode2 =~ /(\d+)\.\d{2}1$/){
-			$txid_syn = $1;
-			$name_syn = getName($1);
-		}
-		if ($parent2 =~ /(\d+)\.\d{2}1$/){
-			$parent_syn = $1;
-			$parent_syn_name = getName($parent_syn);
-		}
-		my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$parent_name."\t".$txid_syn."\t".$name_syn."\t".$parent_syn."\t".$parent_syn_name."\n";
-		print TREE $defLine;
-		
-	}
-	
-	my @taxallnomyLineageNoRank = @$taxallnomyLineageNoRank;
-
-	if ($leaf){
-		for(my $i = scalar @taxallnomyLineageNoRank - 1; $i > 0; $i--){
-			next if (exists $taxallnomy_treeNoRank{$taxallnomyLineageNoRank[$i]});
-			$taxallnomy_treeNoRank{$taxallnomyLineageNoRank[$i]} = 1;
-			
-			my $parent2;
-			$parent2 = $taxallnomyLineageNoRank[$i - 1];
-			my $rank2;
-			if ($taxallnomyLineageNoRank[$i] =~ /\.(\d{2})(\d)$/){
-				my $rankCode = $1;
-				my $rankType = $2;
-				$rank2 = $ncbi_all_ranks[$rankCode - 1];
+				my $taxonAdd2 = ($possibleRank/100)+0.001+$lineage[$i][4];
+				push(@taxallnomyLineage, $taxonAdd2);
+				push(@taxallnomyLineageUnb, $lineage[$i][4]);
+				$currRank++;
+				
 			} else {
-				$rank2 = $table[$taxallnomyLineageNoRank[$i]][8];
+				# unranked taxon without rank assigned
+				#next;
+				push(@taxallnomyLineageUnb, $lineage[$i][4]);
+			}
+		}
+		
+		if(!exists $taxallnomy_tree{$lineage[$i][4]}){
+			$taxallnomy_tree{$lineage[$i][4]} = 1;
+			my $parent2 = "\\N";
+			my $txidCode2 = $lineage[$i][4];
+			$parent2 = $table[$txidCode2][0] if ($table[$txidCode2][0]);
+			my $rank2 = $table[$txidCode2][1];
+			my $rankName2 = $rev_ncbi_all_ranks{$table[$txidCode2][1]};
+			my $rankType = 0;
+			if ($rank2 == -1){
+				if ($table[$txidCode2][5]){
+					my @possibleRanks = @{$table[$txidCode2][5]};
+					$rank2 = $possibleRanks[0] + 1;
+					$rankType = 1;
+				}
+			} else {
+				$rank2++;
+			}
+			my $unclassified = 0;
+			$unclassified = 1 if ($table[$txidCode2][9]);
+			
+			my $name2 = $table[$txidCode2][3][0];
+			my $comname2 = "\\N";			
+			if ($table[$txidCode2][3][1]){
+				$comname2 = $table[$txidCode2][3][1];
+			} elsif ($table[$txidCode2][3][2]) {
+				$comname2 = $table[$txidCode2][3][2];
 			}
 			
-			my $txidCode2 = $taxallnomyLineageNoRank[$i];			
-			my $name2 = getName($txidCode2);
-			my $parent_name = getName($parent2);
-			my $txid_syn = "\\N";
-			my $name_syn = "\\N";
-			my $parent_syn = "\\N";
-			my $parent_syn_name = "\\N";
-			if ($txidCode2 =~ /(\d+)\.\d{2}1$/){
-				$txid_syn = $1;
-				$name_syn = getName($1);
+			#my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$parent_name."\t".$txid_syn."\t".$name_syn."\t".$parent_syn."\t".$parent_syn_name."\n";
+			my $defLine = $txidCode2."\t".$parent2."\n";
+			print TREEORI $defLine;
+			$defLine = $txidCode2."\t".$rank2."\t".$rankType."\t".$name2."\t".$comname2."\t".$unclassified."\t\\N\t".$leaf."\n";
+			print TAXDATA $defLine;
+			my @taxallnomyLineage2 = @taxallnomyLineage;
+			while(scalar @taxallnomyLineage2 < scalar @ncbi_all_ranks){
+				my $rank3txidCode = $txidCode2 + 0.003 + (scalar @taxallnomyLineage2 + 1)/100;
+				push(@taxallnomyLineage2, $rank3txidCode);
 			}
-			if ($parent2 =~ /(\d+)\.\d{2}1$/){
-				$parent_syn = $1;
-				$parent_syn_name = getName($parent_syn);
+			my $taxallnomyLineage2 = join("\t", @taxallnomyLineage2);
+			$defLine = $txidCode2."\t".$taxallnomyLineage2."\n";
+			print LIN $defLine;
+			
+			my @taxallnomyLineageName;
+			foreach my $taxon(@taxallnomyLineage2){
+				my $name = getName($taxon);
+				push(@taxallnomyLineageName, $name);
 			}
-			my $defLine = $txidCode2."\t".$parent2."\t".$rank2."\t".$name2."\t".$parent_name."\t".$txid_syn."\t".$name_syn."\t".$parent_syn."\t".$parent_syn_name."\n";
-			print TREEUNB $defLine;
+			my $taxallnomyLineageName = join("\t", @taxallnomyLineageName);
+			$defLine = $txidCode2."\t".$taxallnomyLineageName."\n";
+			print LINNAME $defLine;
+			
+			if ($leaf and $unclassified == 0){
+				for(my $j = 0; $j < scalar @taxallnomyLineage2; $j++){
+					if ($taxallnomyLineage2[$j] =~ /\.(\d{2})(\d)$/){
+						my $rankCode = $1;
+						my $rankType = $2;
+						#if ($rankType != 0){
+						$rankCountType{"distinct"}{$taxallnomy_ranks_code{"code"}{$1}{"rank"}}{$2}{$taxallnomyLineage2[$j]} = 1;
+						$rankCountType{"all"}{$taxallnomy_ranks_code{"code"}{$1}{"rank"}}{$2} += 1;
+						#}
+					} else {
+						my $code = sprintf($format, $j+1);
+						$rankCountType{"distinct"}{$taxallnomy_ranks_code{"code"}{$code}{"rank"}}{0}{$taxallnomyLineage2[$j]} = 1;
+						$rankCountType{"all"}{$taxallnomy_ranks_code{"code"}{$code}{"rank"}}{0} += 1;
+					}
+				}
+			}
+			
+			if (exists $merged{$txidCode2}){
+				foreach my $merged(keys %{$merged{$txidCode2}{"merged"}}){
+					my $defLine2 = $merged."\t".$taxallnomyLineage2."\n";
+					print LIN $defLine2;
+					$defLine2 = $merged."\t".$taxallnomyLineageName."\n";
+					print LINNAME $defLine2;
+					my $defLine4 = $merged."\t".$parent2."\n";
+					print TREEORI $defLine4;
+					my $defLine5 = $merged."\t".$rank2."\t".$rankType."\t".$name2."\t".$comname2."\t".$unclassified."\t".$txidCode2."\t".$leaf."\n";
+					print TAXDATA $defLine5;
+				}
+			}	
 		}
 	}
-	
-	# scientific name and common name
-	my $comname2;
-	
-	if (!$table[$txid][3][1] and !$table[$txid][3][2]){
-		$comname2 = "\\N";
-	} else {
-		if ($table[$txid][3][1]){
-			$comname2 = $table[$txid][3][1];
-		} else {
-			$comname2 = $table[$txid][3][2];
+
+	# generate tree_all and tree
+	for(my $i = 1; $i < scalar @taxallnomyLineageUnb; $i++){
+		next if (exists $taxallnomy_treeAll{$taxallnomyLineageUnb[$i]});
+		$taxallnomy_treeAll{$taxallnomyLineageUnb[$i]} = 1;
+		my $txid = $taxallnomyLineageUnb[$i];
+		my $j = 1;
+		my $parent = $taxallnomyLineageUnb[$i-$j];
+		print TREEUNB $txid."\t".$parent."\n";
+		while($parent != 1 and $table[$parent][1] == -1 and !$table[$parent][5]){
+			$j++;
+			$parent = $taxallnomyLineageUnb[$i-$j];
 		}
-	}
-	$comname2 =~ s/\\/\\\\/g;
-	$comname2 =~ s/'/\\'/g;
-	$comname2 =~ s/%/\\%/g;
-	
-	my $taxallnomyLineage2 = join("\t", @taxallnomyLineage);
-	$sciname =~ s/\\/\\\\/g;
-	$sciname =~ s/'/\\'/g;
-	$sciname =~ s/%/\\%/g;
-	
-	my $defLine = $txid."\t".$taxallnomyLineage2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t0\t$rank\n";
-	print LIN $defLine;
-	
-	# data for LINNAME
-	my @taxallnomyLineageName;
-	for(my $i = 0; $i < scalar @taxallnomyLineage; $i++){
-		my $name3 = getName($taxallnomyLineage[$i]);
-		push(@taxallnomyLineageName, $name3);
-	}
-	my $taxallnomyLineageName2 = join("\t", @taxallnomyLineageName);
-	$taxallnomyLineageName2 =~ s/\\/\\\\/g;
-	$taxallnomyLineageName2 =~ s/'/\\'/g;
-	$taxallnomyLineageName2 =~ s/%/\\%/g;
-	
-	my $defLine3 = $txid."\t".$taxallnomyLineageName2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t0\t$rank\n";
-	print LINNAME $defLine3;
-	if (exists $merged{$txid}){
-		foreach my $merged(keys %{$merged{$txid}{"merged"}}){
-			my $defLine2 = $merged."\t".$taxallnomyLineage2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t1\t$rank\n";
-			print LIN $defLine2;
-			my $defLine4 = $merged."\t".$taxallnomyLineageName2."\t".$sciname."\t".$comname2."\t$leaf\t$unclassified\t1\t$rank\n";
-			print LINNAME $defLine4;
-		}
+		print TREE $txid."\t".$parent."\n";
 	}	
 }
 
@@ -1374,11 +1454,11 @@ foreach my $rank(@rankOrder){
 	print RANK $hash_rankPriority{$rank}."\t";
 	print RANK $taxallnomy_ranks_code{"rank"}{$rank}{"code"}."\t";
 	print RANK $taxallnomy_ranks_code{"rank"}{$rank}{"abbrev"}."\t";
-	print RANK scalar(keys %{$rankCount{"distinct"}{$rank}})."\t";
+	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{0}})."\t";
 	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{1}})."\t";
 	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{2}})."\t";
 	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{3}})."\t";
-	print RANK $rankCount{"all"}{$rank}."\t";
+	print RANK $rankCountType{"all"}{$rank}{0}."\t";
 	print RANK $rankCountType{"all"}{$rank}{1}."\t";
 	print RANK $rankCountType{"all"}{$rank}{2}."\t";
 	print RANK $rankCountType{"all"}{$rank}{3}."\n";
@@ -1501,6 +1581,8 @@ sub generate_taxallnomy {
 		}
 	}
 	
+	return (\@lineageTaxAllnomy);
+	
 	my @lineageTaxAllnomyUnbalanced;
 	my %lineageTaxAllnomyUnbalanced;
 	
@@ -1523,5 +1605,25 @@ sub generate_taxallnomy {
 		}
 	}
 	
-	return (\@lineageTaxAllnomy, \@lineageTaxAllnomyUnbalanced);
+	my @lineageTaxallnomyNoNode23;
+	for(my $i = 0; $i < scalar @lineageTaxAllnomyUnbalanced; $i++){
+		my $txid = $lineageTaxAllnomyUnbalanced[$i];
+		if ($txid !~ /\.\d{2}[23]$/){
+			push(@lineageTaxallnomyNoNode23, $txid);
+		}
+	}
+	
+	return (\@lineageTaxAllnomy, \@lineageTaxAllnomyUnbalanced,\@lineageTaxallnomyNoNode23);
+}
+
+sub checkUnclass {
+	my $name = $_[0];
+	# verify if this represents an unclassified or an environmental sample.
+	my $control;
+	if ($name =~ m/unpublished|unidentified|unclassified|environmental|unassigned|incertae sedis|other sequences/i){
+		$control = 1;
+	} else {
+		$control = 0;
+	}
+	return $control;
 }
