@@ -103,25 +103,25 @@ varietas        | Taxon code for Varietas rank
 forma           | Taxon code for Forma rank                       
 
 ### 2) lin_name table
-Same as lin table, but instead of having taxon codes on each taxonomic rank
-column, it contains taxon name. This table occupies more space than the lin table.
+This table has the same structure as lin table, but instead of having taxon codes on each taxonomic rank
+column, it contains the taxon name. This table occupies more space than the lin table.
 Contents of this table could be retrieved using script get_lineage.pl (see below).
 
 ### 3) tree_balanced table
 This table provides the balanced hierarchical structure of Taxallnomy database.
 
-* tree table content:
+* tree_balanced table content:
 
 Column         | Description
 ---------------|---------------------------------------------------------
 txid           | Taxon code used by Taxallnomy (primary key)             
-parent         | Taxon code its parent taxon (indexed)                   
+parent         | Taxon code of its parent taxon (indexed)                   
 
 ### 4) tree_all table
 It has the same structure as the tree_balanced table. In this tree, no rank
 taxa that were deleted during the generation of the taxallnomy database 
-(because no ranks could be assigned on it), are preserved.
-Thus, be aware that the hierarchical strucuture on this table is not balanced.
+(because no rank could be assigned to it), are preserved.
+Thus, the hierarchical strucuture of this table is not balanced.
 
 ### 5) tree_original table
 It has the same structure as the tree_balanced table and the same
@@ -144,7 +144,6 @@ leaf            | 1 if txid is a leaf taxon, 0 otherwise
 \* includes txid which has "unpublished", "unidentified", "unclassified", "environmental", "unassigned", 
   "incertae sedis" or "other sequences" in its name.
 
-
 ### 7) rank table
 A table containing some information about the taxonomic ranks comprising
 the database. 
@@ -153,8 +152,8 @@ the database.
 
 Column       | Description
 -------------|---------------------------------------------------------------------
-rank         | taxonomic rank (TR)                                               
-order        | order of the TR                                                   
+rank         | taxonomic rank (TR) name                                               
+order        | level of the TR                                                   
 priority     | priority order of TR according its frequency in the lineages      
 code         | TR code                                                           
 abbrev       | TR abbreviation                                                   
@@ -169,7 +168,6 @@ count_type3  | number of taxa of type 3 among all lineages of leaf taxa
 
 
 ## Taxallnomy taxon code and name
-
 
 Taxallnomy primarily uses the Taxonomy ID provided by  NCBI  Taxonomy  database  to 
 identify all nodes comprising its hierarchical structure. However, since Taxallnomy 
