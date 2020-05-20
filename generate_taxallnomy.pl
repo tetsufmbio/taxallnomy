@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.5
+# Version 1.5.2
 
 ##############################################################################
 #                                                                            #
@@ -41,7 +41,7 @@
 # - Verify genus and species separatedely.                                   #
 # - Rank priority.                                                           #
 # - If there are more unranked node than rank to be assigned, evaluate if    #
-# the node should have a rank assigned, or transfer the to the next nodes.   #
+# the node should have a rank assigned, or transfer rank to the next nodes.  #
 # - Verifies redundant levels.                                               #
 # - Verifies if there are unranked nodes with CR <= NP in the path to NA.    #
 # - taxallnomy_lin_name table added.                                         #
@@ -49,6 +49,13 @@
 # - taxallnomy_tree_all table included;                                      #
 # - taxallnomy_tree_original included;                                       #
 # - taxallnomy_tax_data included;                                            #
+# - generic input for local taxdump;                                         #
+# - help added;                                                              #
+#                                                                            #
+# Modification specific to version 1.5.2                                     #
+#                                                                            #
+# - Notifies if there is an inconsistency in the taxdump file;               #
+# - tree_balanced table replaced by tree_complete;                           #
 #                                                                            #
 ##############################################################################
 
@@ -59,7 +66,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.5";
+my $taxallnomy_version = "1.5.2";
 my $version;
 my $help;
 my $man;
@@ -67,6 +74,7 @@ my $local_dump;
 
 GetOptions(
     'local=s'=> \$local_dump,
+	'out=s'=> \$dir,
     'help!'     	=> \$help,
 	'version!'		=> \$version,
 	'man!'			=> \$man,
@@ -91,9 +99,18 @@ if($local_dump){
 	if (-e $local_dump){
 		system("cp $local_dump $dir");
 		chdir $dir;
-		system("tar -zxf taxdump.tar.gz");
+		my @path = split(/\//, $local_dump);
+		my $file_dump = pop(@path);
+		if ($file_dump =~ /\.tar\.gz$/){
+			system("tar -zxf $file_dump");
+		} elsif ($file_dump =~ /\.zip$/){
+			system("unzip $file_dump");
+		} else {
+			die "ERROR: Can't recognize as compressed file from NCBI Taxonomy.\n";
+		}
+		
 	} else {
-		die "ERROR: Can't find the taxdump.tar.gz";
+		die "ERROR: $local_dump is not a file.\n";
 	}
 } else {
 	print "  Downloading taxdump.tar.gz... \n";
@@ -347,6 +364,16 @@ while (scalar(keys %hash_stem2) > 0){
 		delete $hash_stem2{$rank3[0]};
 		delete $hash_rank2{$rank3[0]};
 		delete $stemOrder{$rank3[0]};
+	} elsif (scalar(@rank3) == 0) {
+		# Inconsistency in the rank order in taxdump file;
+		print "ERROR: There is some inconsistency in the rank order in taxdump file\n";
+		print "parent\tchild\n";
+		foreach my $rank (keys %stemOrder) {
+			foreach my $rank2(keys %{$stemOrder{$rank}}){
+				print $rank."\t".$rank2."\n";
+			}
+		}
+		die;
 	} else {
 	
 		my %hash_countRank3;
@@ -1009,8 +1036,8 @@ open(RANK, "> taxallnomy_rank.tab") or die;
 open(RANKSQL, "> taxallnomy_rank.sql") or die;
 open(LINNAME, "> taxallnomy_lin_name.tab") or die;
 open(LINNAMESQL, "> taxallnomy_lin_name.sql") or die;
-open(TREE, "> taxallnomy_tree_balanced.tab") or die;
-open(TREESQL, "> taxallnomy_tree_balanced.sql") or die;
+open(TREE, "> taxallnomy_tree_complete.tab") or die;
+open(TREESQL, "> taxallnomy_tree_complete.sql") or die;
 open(TREEORI, "> taxallnomy_tree_original.tab") or die;
 open(TREEORISQL, "> taxallnomy_tree_original.sql") or die;
 open(TREEUNB, "> taxallnomy_tree_all.tab") or die;
@@ -1100,29 +1127,29 @@ print LINNAMESQL  '  PRIMARY KEY (`txid`)
 LOAD DATA LOCAL INFILE \'taxallnomy_lin_name.tab\' INTO TABLE lin_name;
 ';
 
-# sql for tree_balanced table
+# sql for tree_complete table
 print TREESQL $dumpHead.'
 --
--- Table structure for table `tree_balanced`
+-- Table structure for table `tree_complete`
 --
 
-DROP TABLE IF EXISTS `tree_balanced`;
+DROP TABLE IF EXISTS `tree_complete`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tree_balanced` (
+CREATE TABLE `tree_complete` (
   `txid` DECIMAL(20,3) NOT NULL,
   `parent`DECIMAL(20,3) NOT NULL,
   PRIMARY KEY (`txid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-ALTER TABLE `tree_balanced` ADD INDEX `parent` (`parent`);
+ALTER TABLE `tree_complete` ADD INDEX `parent` (`parent`);
 
 --
 -- Dumping data for table `taxallnomy`
 --
 
-LOAD DATA LOCAL INFILE \'taxallnomy_tree_balanced.tab\' INTO TABLE tree_balanced;
+LOAD DATA LOCAL INFILE \'taxallnomy_tree_complete.tab\' INTO TABLE tree_complete;
 
 ';
 
@@ -1465,16 +1492,15 @@ foreach my $rank(@rankOrder){
 	$count3++;
 }
 
-system ("mv taxallnomy* ..");
+system ("find . -type f -not -name 'taxallnomy*' -delete");
 chdir "..";
-system("rm -rf $dir");
 
 print "All done!\n\n";
 print "To load TaxAllnomy database in your MySQL just type the following command line:\n\n";
 print "  > mysql -u <username> -p < taxallnomy_XXX.sql\n\n";
 print "or in the MySQL environment:\n\n";
 print "  mysql> source taxallnomy_XXX.sql\n\n";
-print "XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_balanced,
+print "XXX conrresponds to the table name of Taxallnomy database. They are lin, lin_name, tree_complete,
 tree_all or rank. See README for a detailed description of each table.\n\n";
 
 sub getName {
@@ -1627,3 +1653,62 @@ sub checkUnclass {
 	}
 	return $control;
 }
+
+=head1 NAME
+
+generate_taxallnomy - script for generating Taxallnomy database.
+
+=head1 SYNOPSIS
+
+perl generate_taxallnomy
+
+perl generate_taxallnomy -local </path/to/taxdump_file>
+
+perl generate_taxallnomy -local </path/to/taxdump_file> -out <dir>
+
+=item B<Inputs>:
+
+[-local]
+	
+=item B<Other parameters>:
+
+[-dir]
+		
+=item B<Help>:
+
+[-help] [-man]
+
+Use -man for a detailed help.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-local> </path/to/taxdump_file>
+
+Generate Taxallnomy database using a local taxdump file. If this parameter is ommited, the script will download the latest taxdump file from NCBI.
+
+=item B<-out> <dir> [default: taxallnomy_data]
+
+Name of the output directory.
+
+=item B<-version>
+
+Print the version of the script and exit.
+
+=item B<-help>
+
+Print a brief help message and exit.
+
+=item B<-man>
+
+Prints the manual page and exit.
+
+=back
+
+=head1 DESCRIPTION
+
+B<Taxallnomy> is a hierarchically complete taxonomic database based on NCBI Taxonomy that provides taxonomic lineages according to the ranks used on Linnean classification system.
+in a phylogenetic tree. 
+
+=cut
