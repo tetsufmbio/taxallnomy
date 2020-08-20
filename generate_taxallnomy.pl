@@ -140,7 +140,7 @@ print "Making Taxonomy table file...\n";
 open(TXID, "< nodes.dmp") or die "ERROR: Can't open nodes.dmp"; 
 
 my %ncbi_all_ranks = (
-	"no rank" => -1,
+	"clade" => -1,
 );
 my $ncbi_all_ranks = \%ncbi_all_ranks;
 my @table;	# table[$txid][0] - parent 
