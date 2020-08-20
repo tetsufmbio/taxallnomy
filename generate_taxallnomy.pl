@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.5.2
+# Version 1.6.0
 
 ##############################################################################
 #                                                                            #
@@ -51,11 +51,11 @@
 # - taxallnomy_tax_data included;                                            #
 # - generic input for local taxdump;                                         #
 # - help added;                                                              #
-#                                                                            #
-# Modification specific to version 1.5.2                                     #
-#                                                                            #
 # - Notifies if there is an inconsistency in the taxdump file;               #
 # - tree_balanced table replaced by tree_complete;                           #
+#                                                                            #
+# Modification specific to version 1.6.0                                     #
+# - "no rank" is considered as "clade"                                       #
 #                                                                            #
 ##############################################################################
 
@@ -66,7 +66,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.5.2";
+my $taxallnomy_version = "1.6.0";
 my $version;
 my $help;
 my $man;
@@ -171,12 +171,13 @@ while(my $line = <TXID>){
 		delete $leaf{$line[1]};
 	}
 	
-	#if (!exists $ncbi_all_ranks{$line[2]}){
-	#	die "ERROR: new rank found. Script need update: ".$line[0]." ".$line[2]."\n";
-	#}
-	#$ncbi_all_ranks{$line[2]} = 1 if ($line[2] ne "no rank");
+	# ranks considered as no rank:
+	if ($line[2] eq "no rank"){
+		$line[2] = "clade";
+	};
+	
 	$table[$line[0]][8] = $line[2]; # rank
-	$hash_rank{$line[2]} = 1 if ($line[2] ne "no rank");
+	$hash_rank{$line[2]} = 1 if ($line[2] ne "clade");
 	if (!$table[$line[1]][2]){
 		$table[$line[1]][2][0] = $line[0] if ($line[0] != $line[1]); # children
 	} else {
@@ -280,7 +281,7 @@ for(my $i = 0; $i < scalar @leaf; $i++){
 		if(checkUnclass($table[$node][3][0])){
 			$unclassControl = $node;
 		}
-		if ($table[$node][8] ne "no rank"){
+		if ($table[$node][8] ne "clade"){
 			unshift(@ranksLineage, $table[$node][8]);			
 			unshift(@lineage, $node);			
 		}
@@ -402,7 +403,7 @@ foreach my $stemOrder(@stemOrder){
 
 my %taxAllnomy_ranks;
 my %rev_ncbi_all_ranks = ( 
-	-1 => "no rank"
+	-1 => "clade"
 );
 my $count = 0;
 foreach my $rank(@rankOrder){
@@ -1555,7 +1556,7 @@ sub generate_taxallnomy {
 			my $append = 0.001;
 			my $control = 0;
 			while (exists($lineageEx{$l + 1}{"rank"})){
-				if ($lineageEx{$l + 1}{"rank"} ne "no rank"){
+				if ($lineageEx{$l + 1}{"rank"} ne "clade"){
 					# verify if the searching rank level is below the current rank level
 					if ($ncbi_all_ranks{$ncbi_all_ranks[$i]} < $ncbi_all_ranks{$lineageEx{$l + 1}{"rank"}}){
 						$append = 0.002;
