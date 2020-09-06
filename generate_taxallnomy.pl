@@ -6,7 +6,7 @@
 
 ##############################################################################
 #                                                                            #
-#    Copyright (C) 2017 Tetsu Sakamoto                                       #
+#    Copyright (C) 2017-2020 Tetsu Sakamoto                                  #
 #                                                                            #
 #    This program is free software: you can redistribute it and/or modify    #
 #    it under the terms of the GNU General Public License as published by    #
@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.6.0
+# Version 1.7.0
 
 ##############################################################################
 #                                                                            #
@@ -57,6 +57,10 @@
 # Modification specific to version 1.6.0                                     #
 # - "no rank" is considered as "clade"                                       #
 #                                                                            #
+# Modification specific to version 1.7.0                                     #
+# - This version uses the rank order provided by NCBI Taxonomy in the paper  #
+#   Schoch et al. (2020).                                                    #
+#                                                                            #
 ##############################################################################
 
 use strict;
@@ -66,7 +70,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.6.0";
+my $taxallnomy_version = "1.7.0";
 my $version;
 my $help;
 my $man;
@@ -137,12 +141,18 @@ if (-e "names.dmp" && -e "nodes.dmp" && -e "merged.dmp"){
 
 print "Making Taxonomy table file...\n";
 
+# load rank info
+my $ref_ncbi_ranks = rankOrder();
+my %ncbi_ranks = %$ref_ncbi_ranks;
+
+my @rankOrder =  @{$ncbi_ranks{"order"}};
+
+my %ncbi_all_ranks = %{$ncbi_ranks{"name"}};
+
+my %rev_ncbi_all_ranks = %{$ncbi_ranks{"level"}};
+
 open(TXID, "< nodes.dmp") or die "ERROR: Can't open nodes.dmp"; 
 
-my %ncbi_all_ranks = (
-	"clade" => -1,
-);
-my $ncbi_all_ranks = \%ncbi_all_ranks;
 my @table;	# table[$txid][0] - parent 
 			# table[$txid][1] - rank (integer, start from 0) 
 			# table[$txid][2] - [children]
@@ -171,13 +181,15 @@ while(my $line = <TXID>){
 		delete $leaf{$line[1]};
 	}
 	
-	# ranks considered as no rank:
-	if ($line[2] eq "no rank"){
-		$line[2] = "clade";
-	};
+	if(exists $ncbi_all_ranks{$line[2]}){
+		$table[$line[0]][8] = $ncbi_ranks{"level"}{$ncbi_all_ranks{$line[2]}{"level"}}; # rank name (synonymus replaced)
+		$table[$line[0]][1] = $ncbi_all_ranks{$table[$line[0]][8]}{"level"}; # rank level
+	} else {
+		# new rank found;
+		print "NOTE: new rank found: ".$table[$line[0]][8]."\n";
+		exit;
+	}
 	
-	$table[$line[0]][8] = $line[2]; # rank
-	$hash_rank{$line[2]} = 1 if ($line[2] ne "clade");
 	if (!$table[$line[1]][2]){
 		$table[$line[1]][2][0] = $line[0] if ($line[0] != $line[1]); # children
 	} else {
@@ -210,88 +222,65 @@ while(my $line = <TXIDNAME>){
 } 
 close TXIDNAME; 
 
-# determine rank radical and stem
-print "  Determining rank radicals and stem... \n";
-
-my %hash_radical;
-my %hash_allRankRadical;
-my %hash_allRankStem;
-my %hash_withRadical;
-my %hash_stem;
-foreach my $rank1(keys %hash_rank){
-	my @words1 = split(" ", $rank1);
-	my $control_noRadical = 0;
-	foreach my $rank2(keys %hash_rank){
-		next if ($rank1 eq $rank2);
-		my @words2 = split(" ", $rank2);
-		next if (scalar @words1 ne scalar @words2);
-		my $control = 1;
-		my @radical;
-		for(my $i = 0; $i < scalar @words1; $i++){
-			if ($words2[$i] !~ /$words1[$i]/){
-				$control = 0;
-			} else {
-				$words2[$i] =~ s/$words1[$i]//;
-				if ($words2[$i] ne ""){
-					push(@radical, $words2[$i]);
-				}
-			}
-		}
-		if ($control){
-			
-			my $radical = join(" ", @radical);
-			$hash_stem{$rank1}{$rank2} = $radical;
-			$hash_stem{$rank1}{$rank1} = "stem";
-			$hash_allRankRadical{$rank1} = "stem";
-			$hash_allRankRadical{$rank2} = $radical;
-			$hash_allRankStem{$rank1} = $rank1;
-			$hash_allRankStem{$rank2} = $rank1;
-			$hash_radical{$radical}{$rank1} = $rank2;
-			$hash_radical{"stem"}{$rank1} = $rank1;
-			$hash_withRadical{$rank1} = 1;
-			$hash_withRadical{$rank2} = 1;
-		}
-	}
-}
-
-foreach my $rank(keys %hash_rank){
-	if (!exists $hash_withRadical{$rank}){
-		$hash_stem{$rank}{$rank} = "stem";
-		$hash_radical{"stem"}{$rank} = $rank;
-		$hash_allRankRadical{$rank} = "stem";
-		$hash_allRankStem{$rank} = $rank;
-	}
-}
-
-# determine rank order
-print "  Determining rank order... \n";
-my %rankOrder;
-my %stemOrder;
+# Check if all taxonomic tree follows the rank hierarchy and annotate unclassified taxa
+print "  Checking any inconsistence in taxonomic tree... \n";
 my %rankCount;
-my $countUn = 0;
+my %inconsistence = ( "pair" => {}, "taxa" => {});
+my $pairID = 1;
+
 for(my $i = 0; $i < scalar @leaf; $i++){
+	
 	my $node = $leaf[$i];
-	#next if ($table[$node][2]);
-	#push(@leaf, $node); # store leaf txid
+	my $unclassControl = 0;
 	my @ranksLineage;
 	my @lineage;
-	my $unclassControl = 0;
+	
+	#next if ($table[$node][2]);
+	#push(@leaf, $node); # store leaf txid
+	
+	my $rank2compare = $table[$node][1];
+	my $nodeOfRank2compare = $node;
+	if ($rank2compare == -1){
+		$rank2compare = scalar @rankOrder;
+	}
+	
 	while ($node != 1){	
 		
 		if(checkUnclass($table[$node][3][0])){
 			$unclassControl = $node;
 		}
-		if ($table[$node][8] ne "clade"){
+		
+		if ($table[$node][1] != -1){
 			unshift(@ranksLineage, $table[$node][8]);			
-			unshift(@lineage, $node);			
+			unshift(@lineage, $node);
 		}
 		
+		if($table[$node][0]){
+			my $parent = $table[$node][0];
+			if ($table[$parent][1] != -1){
+				if ($rank2compare <= $table[$parent][1]){
+					# inconsistence found
+					#print $nodeOfRank2compare."\t".$rev_ncbi_all_ranks{$rank2compare}."\t".$parent."\t".$rev_ncbi_all_ranks{$table[$parent][1]}."\n";
+					$inconsistence{"pair"}{$pairID} = $parent.";".$nodeOfRank2compare;
+					$inconsistence{"taxa"}{$parent}{"count"} += 1;
+					$inconsistence{"taxa"}{$nodeOfRank2compare}{"count"} += 1;
+					$inconsistence{"taxa"}{$parent}{"pair"} .= $pairID.";";
+					$inconsistence{"taxa"}{$nodeOfRank2compare}{"pair"} .= $pairID.";";
+					$pairID++;
+					
+				} else {
+					$rank2compare = $table[$parent][1];
+					$nodeOfRank2compare = $parent;
+				}
+			}
+		}
+				
 		$node = $table[$node][0] if ($table[$node][0]);
 	}
 	
 	# annotate unclassified txid
 	if ($unclassControl){
-		$countUn++;
+		
 		if (!$table[$leaf[$i]][9]){
 			$node =  $unclassControl;
 			$table[$node][9] = 1;
@@ -304,153 +293,25 @@ for(my $i = 0; $i < scalar @leaf; $i++){
 			}			
 		}
 	}
-	my %rankExist;
+	
 	if (scalar @ranksLineage > 0){ # changed here
 		for(my $j = 0; $j < scalar @ranksLineage; $j++){
 			# counting all and distinct taxa in each rank
 			$rankCount{"all"}{$ranksLineage[$j]} += 1 if (!$unclassControl);
 			$rankCount{"distinct"}{$ranksLineage[$j]}{$lineage[$j]} = 1 if (!$unclassControl);
-			$rankExist{$ranksLineage[$j]} = 1;
-			for(my $k = $j+1; $k < scalar @ranksLineage; $k++){
-				$rankOrder{$ranksLineage[$j]}{$ranksLineage[$k]} = 1;
-				$stemOrder{$hash_allRankStem{$ranksLineage[$j]}}{$hash_allRankStem{$ranksLineage[$k]}} = 1 if ($hash_allRankStem{$ranksLineage[$j]} ne $hash_allRankStem{$ranksLineage[$k]});
-			}
+			
+			#for(my $k = $j+1; $k < scalar @ranksLineage; $k++){
+			#	$rankOrder{$ranksLineage[$j]}{$ranksLineage[$k]} = 1;
+			#	$stemOrder{$hash_allRankStem{$ranksLineage[$j]}}{$hash_allRankStem{$ranksLineage[$k]}} = 1 if ($hash_allRankStem{$ranksLineage[$j]} ne $hash_allRankStem{$ranksLineage[$k]});
+			#}
 		}
 	} else {
 		next;
 	}
 }
 
-my %radicalOrder;
-foreach my $stem(keys %hash_stem){
-	my @ranks = keys %{$hash_stem{$stem}};
-	next if (scalar @ranks == 1);
-	for(my $i = 0; $i < scalar @ranks; $i++){
-		for(my $j = $i + 1; $j < scalar @ranks; $j++){
-			if (exists $rankOrder{$ranks[$i]}{$ranks[$j]}){
-				$radicalOrder{$hash_stem{$stem}{$ranks[$i]}}{$hash_stem{$stem}{$ranks[$j]}} = 1;
-			} elsif (exists $rankOrder{$ranks[$j]}{$ranks[$i]}){
-				$radicalOrder{$hash_stem{$stem}{$ranks[$j]}}{$hash_stem{$stem}{$ranks[$i]}} = 1;
-			}
-		}
-	}
-}
-
-my %hashRankScore;
-foreach my $radical(keys %hash_radical){
-	if (exists $radicalOrder{$radical}){
-		$hashRankScore{$radical} = scalar(keys %{$radicalOrder{$radical}});
-	} else {
-		$hashRankScore{$radical} = 0;
-	}
-}
-
-my @stemOrder;
-my %hash_stem2 = map {$_ => 1 } keys %hash_stem;
-my @rankOrder;
-while (scalar(keys %hash_stem2) > 0){
-	my @ranks = keys %hash_stem2;
-	my %hash_rank2 = map { $_ => 1 } @ranks;
-	foreach my $rank (keys %stemOrder) {
-		foreach my $rank2(keys %{$stemOrder{$rank}}){
-			if (exists $hash_rank2{$rank2}){
-				delete $hash_rank2{$rank2};
-			}
-		}
-	}
-	my @rank3 = keys %hash_rank2;
-	if (scalar(@rank3) == 1){
-		#print $rank3[0]."\n";
-		push(@stemOrder, $rank3[0]);
-		delete $hash_stem2{$rank3[0]};
-		delete $hash_rank2{$rank3[0]};
-		delete $stemOrder{$rank3[0]};
-	} elsif (scalar(@rank3) == 0) {
-		# Inconsistency in the rank order in taxdump file;
-		print "ERROR: There is some inconsistency in the rank order in taxdump file\n";
-		print "parent\tchild\n";
-		foreach my $rank (keys %stemOrder) {
-			foreach my $rank2(keys %{$stemOrder{$rank}}){
-				print $rank."\t".$rank2."\n";
-			}
-		}
-		die;
-	} else {
-	
-		my %hash_countRank3;
-		foreach my $rank3(@rank3){
-			$hash_countRank3{$rank3} = scalar(keys %{$rankCount{"distinct"}{$rank3}});
-		}
-		print "NOTE: the order of these ranks could not be precisely determined: ".join(",", @rank3).". Stablished order is:\n";
-		foreach my $rank3(sort {$hash_countRank3{$a} <=> $hash_countRank3{$b}} keys %hash_countRank3){
-			print "      ".$rank3."\n";
-			push(@stemOrder, $rank3);
-			delete $hash_stem2{$rank3};
-			delete $hash_rank2{$rank3};
-			delete $stemOrder{$rank3};
-		}
-	}
-}
-
-my @radicalOrder = sort {$hashRankScore{$b} <=> $hashRankScore{$a}} keys %hashRankScore;
-foreach my $stemOrder(@stemOrder){
-	foreach my $radicalOrder(@radicalOrder){
-		if (exists $hash_radical{$radicalOrder}{$stemOrder}){
-			push(@rankOrder, $hash_radical{$radicalOrder}{$stemOrder});
-		}
-	}
-}
-
-my %taxAllnomy_ranks;
-my %rev_ncbi_all_ranks = ( 
-	-1 => "clade"
-);
-my $count = 0;
-foreach my $rank(@rankOrder){
-	$ncbi_all_ranks{$rank} = $count;
-	$ncbi_all_ranks->{$rank} = $count;
-	$taxAllnomy_ranks{$rank} = ($count+1)/100;
-	$rev_ncbi_all_ranks{$count} = $rank;
-	$count++;
-	
-}
-
-for(my $i = 0; $i < scalar @txid; $i++){
-	my $node = $txid[$i];
-	$table[$node][1] = $ncbi_all_ranks{$table[$node][8]};
-}
-
 # establish rank priority
-my %ncbi_rank_priority;
 my @ncbi_rank_priority_general = sort {$rankCount{"all"}{$b} <=> $rankCount{"all"}{$a}} keys %{$rankCount{"all"}};
-
-# make radical and rank abbreviation
-my %hash_radicalAbbrev;
-$hash_radicalAbbrev{"stem"} = "";
-my %hash_revRadicalAbbrev;
-foreach my $radical(keys %hash_radical){
-	if ($radical ne "stem"){
-		my @letter = split("", $radical);
-		my $firstLetter = shift @letter;
-		my $control = 0;
-		for(my $i = 0; $i < scalar @letter; $i++){
-			if ($letter[$i] !~ /[aeiou]/){
-				if (!exists $hash_revRadicalAbbrev{$firstLetter.$letter[$i]}){
-					$hash_revRadicalAbbrev{$firstLetter.$letter[$i]} = $radical;
-					$hash_radicalAbbrev{$radical} = $firstLetter.$letter[$i];
-					$control = 1;
-					last;
-				}
-			}
-		}
-		if (!$control){
-			die "Could not determine an abbreviation for this radical: $radical.\nPlease notify me about this error (tetsufmbio\@gmail.com).\n\n";
-		}
-	}	
-}
-
-my %hash_stemAbbrev;
-my %hash_revStemAbbrev;
 my %hash_rankPriority;
 my $count2 = 1;
 foreach my $rank(@ncbi_rank_priority_general){
@@ -458,51 +319,88 @@ foreach my $rank(@ncbi_rank_priority_general){
 	# for rank table;
 	$hash_rankPriority{$rank} = $count2;
 	$count2++;
-	
-	my $stem = $hash_allRankStem{$rank};
-	next if (exists $hash_stemAbbrev{$stem});
-	my @words = split(" ", $stem);
-	my $control = 0;
-	for(my $i = 0; $i < scalar @words; $i++){
-		my $abbrev1 = substr($words[$i], 0, 1);
-		$abbrev1 = uc($abbrev1);
-		my $abbrev2 = substr($words[$i], 1, 2);
-		$abbrev2 = lc($abbrev2);
-		my $abbrev = $abbrev1.$abbrev2;
-		if (!exists $hash_revStemAbbrev{$abbrev}){
-			$hash_revStemAbbrev{$abbrev} = $stem;
-			$hash_stemAbbrev{$stem} = $abbrev;
-			$control = 1;
-			last;
-		}
-	}
-	if (!$control){
-		die "Could not determine an abbreviation for this rank: $stem.\nPlease notify me about this error (tetsufmbio\@gmail.com).\n\n";
+}
+
+# include zero ranks in @ncbi_rank_priority_general;
+foreach my $rank(@rankOrder){
+	if(!exists $hash_rankPriority{$rank}){
+		$hash_rankPriority{$rank} = $count2;
+		push(@ncbi_rank_priority_general, $rank);
+		$count2++;
 	}
 }
 
-my @ncbi_all_ranks = @rankOrder;
-
-# Determine rank code for all ranks
-
-my %taxallnomy_ranks_code;
-my %taxallnomy_ranks_code2;
-
-my $nRanks = scalar @rankOrder;
-my $nRanksLength = length $nRanks;
-my $format = "%0".$nRanksLength."d";
-my $rankLevel = 1;
-foreach my $rank(@rankOrder){
-	my $stem = $hash_stemAbbrev{$hash_allRankStem{$rank}};
-	my $radical = $hash_radicalAbbrev{$hash_allRankRadical{$rank}};
+# resolve inconsistence
+while(scalar keys %{$inconsistence{"pair"}} > 0){
 	
-	my $code = sprintf($format, $rankLevel);
-	$taxallnomy_ranks_code{"rank"}{$rank}{"code"} = $code;
-	$taxallnomy_ranks_code{"rank"}{$rank}{"abbrev"} = $radical.$stem;
-	$taxallnomy_ranks_code{"code"}{$code}{"abbrev"} = $radical.$stem;
-	$taxallnomy_ranks_code{"code"}{$code}{"rank"} = $rank;
-	$taxallnomy_ranks_code2{$code} = $radical.$stem."_";
-	$rankLevel++;
+	# search for taxa which appears more in the inconsistence pairs
+	my $n = 0;
+	my $selectedTaxa;
+	foreach my $taxa(keys %{$inconsistence{"taxa"}}){
+		if($inconsistence{"taxa"}{$taxa}{"count"} > $n){
+			$selectedTaxa = $taxa;
+			$n = $inconsistence{"taxa"}{$taxa}{"count"};
+		}
+	}
+	my @tax2remove;
+	if ($n > 1){
+		push(@tax2remove, $selectedTaxa);		
+	} else {
+		foreach my $pairID(keys %{$inconsistence{"pair"}}){
+			my @taxa = split(";",$inconsistence{"pair"}{$pairID});
+			my $taxa2remove;
+			if ($hash_rankPriority{$ncbi_ranks{"level"}{$table[$taxa[0]][1]}} > $hash_rankPriority{$ncbi_ranks{"level"}{$table[$taxa[1]][1]}}){
+				$taxa2remove = $taxa[0];
+			} else {
+				$taxa2remove = $taxa[1];
+			}
+			push(@tax2remove, $taxa2remove);
+		}
+	}
+	
+	foreach my $tax2remove(@tax2remove){
+		my $pairIDset = $inconsistence{"taxa"}{$tax2remove}{"pair"};
+		chop $pairIDset;
+		my @pairIDset = split(";", $pairIDset);
+		foreach my $pairID(@pairIDset){
+			if (exists $inconsistence{"pair"}{$pairID}){
+				my @taxa = split(";",$inconsistence{"pair"}{$pairID});
+				$inconsistence{"taxa"}{$taxa[0]}{"count"} -= 1;
+				$inconsistence{"taxa"}{$taxa[1]}{"count"} -= 1;
+				delete $inconsistence{"taxa"}{$taxa[0]} if ($inconsistence{"taxa"}{$taxa[0]}{"count"} == 0);
+				delete $inconsistence{"taxa"}{$taxa[1]} if ($inconsistence{"taxa"}{$taxa[1]}{"count"} == 0);
+				delete $inconsistence{"pair"}{$pairID};
+			}			
+		}
+
+		# correct count after checking inconsistence
+		#if (!$table[$tax2remove][9]){ # check if it is an unclassified taxon
+		#	delete $rankCount{"distinct"}{$table[$tax2remove][8]}{$tax2remove};
+		#	my $countLeaf = 0;
+		#	if ($table[$tax2remove][2]){
+		#		my @unclassNodes;
+		#		push(@unclassNodes, @{$table[$tax2remove][2]});
+		#		while (scalar @unclassNodes > 0){
+		#			my $node = shift @unclassNodes;
+		#			next if ($table[$node][9]);
+		#			if ($table[$node][2]){
+		#				push(@unclassNodes, @{$table[$node][2]});
+		#			} else {
+		#				$countLeaf++;
+		#			}
+		#		}
+		#		
+		#	} else {
+		#		$countLeaf++;
+		#	}
+		#	$rankCount{"all"}{$table[$tax2remove][8]} -= $countLeaf;
+			
+		#}
+		print "NOTE: ".$tax2remove." had its rank (".$table[$tax2remove][8].") set to clade to avoid inconsistence in the rank hierarchy.\n";
+		$table[$tax2remove][1] = -1;
+		$table[$tax2remove][8] = "clade";
+		
+	}
 }
 
 # merged
@@ -522,11 +420,11 @@ my @species2analyse;
 
 # Determine possible ranks to unranked taxa
 print "  Determining possible ranks to unranked taxa...\n";
-foreach my $rank2analyse(@ncbi_all_ranks){
+foreach my $rank2analyse(@rankOrder){
 	
 	my @nodes2analyse;
 	push (@nodes2analyse, 1);
-	my $rank2analyseInt = $ncbi_all_ranks{$rank2analyse};
+	my $rank2analyseInt = $ncbi_all_ranks{$rank2analyse}{"level"};
 	
 	while(scalar @nodes2analyse != 0){
 	
@@ -559,7 +457,7 @@ foreach my $rank2analyse(@ncbi_all_ranks){
 				
 				# pick min rank
 				@nodes2analyse2 = @{$table[$node][2]} if ($table[$node][2]);
-				my $minRank = scalar @ncbi_all_ranks; 
+				my $minRank = scalar @rankOrder; 
 				while(scalar @nodes2analyse2 != 0){
 					my $node2 = shift @nodes2analyse2;
 					if ($table[$node2][1] == -1){
@@ -580,9 +478,9 @@ foreach my $rank2analyse(@ncbi_all_ranks){
 				@possibleRanks = @{$table[$node][5]} if ($table[$node][5]);
 				push(@possibleRanks, $rank2analyseInt);				
 				$table[$node][5] = \@possibleRanks;
-				if ($rank2analyseInt == $ncbi_all_ranks{"genus"}){
+				if ($rank2analyseInt == $ncbi_all_ranks{"genus"}{"level"}){
 					push(@genus2analyse, $node);
-				} elsif ($rank2analyseInt == $ncbi_all_ranks{"species"}){
+				} elsif ($rank2analyseInt == $ncbi_all_ranks{"species"}{"level"}){
 					push(@species2analyse, $node);
 				}
 			} else {
@@ -613,9 +511,9 @@ while (scalar @genus2analyse > 0){
 				my $node3 = shift @nodes2analyse5;
 				if($table[$node3][1] != -1){
 					# ranked taxon
-					if ($table[$node3][1] < $ncbi_all_ranks{"species"}){
+					if ($table[$node3][1] < $ncbi_all_ranks{"species"}{"level"}){
 						push (@nodes2analyse5, @{$table[$node3][2]}) if $table[$node3][2];
-					} elsif ($table[$node3][1] == $ncbi_all_ranks{"species"}){
+					} elsif ($table[$node3][1] == $ncbi_all_ranks{"species"}{"level"}){
 						# it is a species
 						$controlSpecies = 1;
 						last;
@@ -644,7 +542,7 @@ while (scalar @genus2analyse > 0){
 				my @newPossibleRanksCurrent;
 				my @transferPossibleRanks;
 				for(my $i = 0; $i < scalar @possibleRanksCurrent; $i++){
-					if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"genus"}) {
+					if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"genus"}{"level"}) {
 						push(@newPossibleRanksCurrent, $possibleRanksCurrent[$i]);
 					} else {
 						push(@transferPossibleRanks, $possibleRanksCurrent[$i]);
@@ -652,7 +550,7 @@ while (scalar @genus2analyse > 0){
 				}
 				$table[$node4][5] = undef;
 				$table[$node4][5] = \@newPossibleRanksCurrent if (scalar @newPossibleRanksCurrent > 0);
-				$table[$node4][7][1] = $ncbi_all_ranks{"genus"};
+				$table[$node4][7][1] = $ncbi_all_ranks{"genus"}{"level"};
 				# transfer the ranks to child unranked nodes
 				if ($table[$node4][2]){
 					my @nodes2analyseChild;
@@ -661,7 +559,7 @@ while (scalar @genus2analyse > 0){
 						my $nodeChild = shift @nodes2analyseChild;
 						if($table[$nodeChild][1] == -1){
 							push(@nodes2analyseChild, @{$table[$nodeChild][2]}) if ($table[$nodeChild][2]);
-							$table[$node4][7][1] = $ncbi_all_ranks{"genus"};
+							$table[$node4][7][1] = $ncbi_all_ranks{"genus"}{"level"};
 							$table[$nodeChild][5] = undef;
 						} else {
 							next;
@@ -689,9 +587,9 @@ while (scalar @species2analyse > 0){
 			my $node2 = shift @nodes2analyse4;
 			if($table[$node2][1] != -1){
 				# ranked taxon
-				if ($table[$node2][1] > $ncbi_all_ranks{"genus"}){
+				if ($table[$node2][1] > $ncbi_all_ranks{"genus"}{"level"}){
 					push (@nodes2analyse4, $table[$node2][0]);
-				} elsif ($table[$node2][1] == $ncbi_all_ranks{"genus"}){
+				} elsif ($table[$node2][1] == $ncbi_all_ranks{"genus"}{"level"}){
 					# it is a genus
 					$genusName = $table[$node2][3][0];
 					
@@ -724,14 +622,14 @@ while (scalar @species2analyse > 0){
 				$table[$node4][6][0] = 0;
 				push(@noSpecies, $table[$node4][3][0]);
 				push (@nodes2analyse6, @{$table[$node4][2]}) if $table[$node4][2];
-				$table[$node4][7][1] = $ncbi_all_ranks{"species"};
+				$table[$node4][7][1] = $ncbi_all_ranks{"species"}{"level"};
 				# modify the possible ranks of this node
 				if ($table[$node4][5]){
 					my @possibleRanksCurrent = @{$table[$node4][5]};
 					my @newPossibleRanksCurrent;
 					my @transferPossibleRanks;
 					for(my $i = 0; $i < scalar @possibleRanksCurrent; $i++){
-						if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"species"}) {
+						if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"species"}{"level"}) {
 							push(@newPossibleRanksCurrent, $possibleRanksCurrent[$i]);
 						} else {
 							push(@transferPossibleRanks, $possibleRanksCurrent[$i]);
@@ -773,14 +671,14 @@ while (scalar @species2analyse > 0){
 	} else {
 		$table[$node][6][0] = 0;
 		push(@noSpecies, $table[$node][3][0]);
-		$table[$node][7][1] = $ncbi_all_ranks{"species"};
+		$table[$node][7][1] = $ncbi_all_ranks{"species"}{"level"};
 		# modify the possible ranks of this node
 		if ($table[$node][5]){
 			my @possibleRanksCurrent = @{$table[$node][5]};
 			my @newPossibleRanksCurrent;
 			my @transferPossibleRanks;
 			for(my $i = 0; $i < scalar @possibleRanksCurrent; $i++){
-				if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"species"}) {
+				if ($possibleRanksCurrent[$i] < $ncbi_all_ranks{"species"}{"level"}) {
 					push(@newPossibleRanksCurrent, $possibleRanksCurrent[$i]);
 				} else {
 					push(@transferPossibleRanks, $possibleRanksCurrent[$i]);
@@ -860,11 +758,11 @@ while (scalar @nodes2analyse3 != 0){
 	my $controlPossible = 0;
 	my $depthPossible = 0; # store the number of level of unranked taxa without candidate ranks.
 	my $maxRankLevel = $possibleRanks[0]; # highest level that this node can assume.
-	my $minRankLevel = scalar @ncbi_all_ranks - 1; # store the min level on the longest path of consecutive unranked taxa.
+	my $minRankLevel = scalar @rankOrder - 1; # store the min level on the longest path of consecutive unranked taxa.
 	while(scalar @layer != 0){
 		my @layer2;	
 		my $control = 0;
-		my $minRankLevel2 = scalar @ncbi_all_ranks - 1;
+		my $minRankLevel2 = scalar @rankOrder - 1;
 		while(scalar @layer != 0){
 			my $layer2 = shift @layer;
 			#if ($table[$layer2][1] == -1 && !$table[$layer2][6][0] && !$table[$layer2][6][1]){
@@ -876,7 +774,7 @@ while (scalar @nodes2analyse3 != 0){
 					} else {
 						$controlLeafUnranked = 1;
 					}
-					my $rankLevel = scalar @ncbi_all_ranks - 1;
+					my $rankLevel = scalar @rankOrder - 1;
 					$rankLevel = $table[$layer2][7][1] if ($table[$layer2][7][1]);
 					if ($minRankLevel2 > $rankLevel){
 						$minRankLevel2 = $rankLevel;
@@ -981,9 +879,9 @@ while (scalar @nodes2analyse3 != 0){
 		#my $nodeSuperkingdom = $table[$node][8];
 		my @ncbi_rank_priority = @ncbi_rank_priority_general;
 		foreach my $rankPrio(@ncbi_rank_priority){
-			if (exists $possibleRanks2analyse{$ncbi_all_ranks{$rankPrio}}){
-				push(@rank2assign, $ncbi_all_ranks{$rankPrio});
-				$control = 1 if (exists $possibleRanksInNode{$ncbi_all_ranks{$rankPrio}});
+			if (exists $possibleRanks2analyse{$ncbi_all_ranks{$rankPrio}{"level"}}){
+				push(@rank2assign, $ncbi_all_ranks{$rankPrio}{"level"});
+				$control = 1 if (exists $possibleRanksInNode{$ncbi_all_ranks{$rankPrio}{"level"}});
 				last if (scalar @rank2assign >= $countDepth and $control);
 			}
 		}
@@ -1310,6 +1208,10 @@ foreach my $rank(@rankOrder){
 print TREEUNB "1\t\0\n";
 print TREE "1\t\0\n";
 
+my $nRanks = scalar @rankOrder;
+my $nRanksLength = length $nRanks;
+my $format = "%0".$nRanksLength."d";
+
 foreach my $txid(@leaf){
 	my @lineage;
 	my $species = $txid;
@@ -1408,7 +1310,7 @@ foreach my $txid(@leaf){
 			$defLine = $txidCode2."\t".$rank2."\t".$rankType."\t".$name2."\t".$comname2."\t".$unclassified."\t\\N\t".$leaf."\n";
 			print TAXDATA $defLine;
 			my @taxallnomyLineage2 = @taxallnomyLineage;
-			while(scalar @taxallnomyLineage2 < scalar @ncbi_all_ranks){
+			while(scalar @taxallnomyLineage2 < scalar @rankOrder){
 				my $rank3txidCode = $txidCode2 + 0.003 + (scalar @taxallnomyLineage2 + 1)/100;
 				push(@taxallnomyLineage2, $rank3txidCode);
 			}
@@ -1431,13 +1333,13 @@ foreach my $txid(@leaf){
 						my $rankCode = $1;
 						my $rankType = $2;
 						#if ($rankType != 0){
-						$rankCountType{"distinct"}{$taxallnomy_ranks_code{"code"}{$1}{"rank"}}{$2}{$taxallnomyLineage2[$j]} = 1;
-						$rankCountType{"all"}{$taxallnomy_ranks_code{"code"}{$1}{"rank"}}{$2} += 1;
+						$rankCountType{"distinct"}{$ncbi_ranks{"code"}{$1}{"rank"}}{$2}{$taxallnomyLineage2[$j]} = 1;
+						$rankCountType{"all"}{$ncbi_ranks{"code"}{$1}{"rank"}}{$2} += 1;
 						#}
 					} else {
 						my $code = sprintf($format, $j+1);
-						$rankCountType{"distinct"}{$taxallnomy_ranks_code{"code"}{$code}{"rank"}}{0}{$taxallnomyLineage2[$j]} = 1;
-						$rankCountType{"all"}{$taxallnomy_ranks_code{"code"}{$code}{"rank"}}{0} += 1;
+						$rankCountType{"distinct"}{$ncbi_ranks{"code"}{$code}{"rank"}}{0}{$taxallnomyLineage2[$j]} = 1;
+						$rankCountType{"all"}{$ncbi_ranks{"code"}{$code}{"rank"}}{0} += 1;
 					}
 				}
 			}
@@ -1480,8 +1382,8 @@ foreach my $rank(@rankOrder){
 	print RANK $rank."\t";
 	print RANK $count3."\t";
 	print RANK $hash_rankPriority{$rank}."\t";
-	print RANK $taxallnomy_ranks_code{"rank"}{$rank}{"code"}."\t";
-	print RANK $taxallnomy_ranks_code{"rank"}{$rank}{"abbrev"}."\t";
+	print RANK $ncbi_ranks{"name"}{$rank}{"code"}."\t";
+	print RANK $ncbi_ranks{"name"}{$rank}{"abbrev"}."\t";
 	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{0}})."\t";
 	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{1}})."\t";
 	print RANK scalar(keys %{$rankCountType{"distinct"}{$rank}{2}})."\t";
@@ -1513,7 +1415,7 @@ sub getName {
 		my $typeCode = $3;
 		my $name3 = $table[$txidCode][3][0];
 		if ($typeCode != 0) {
-			my $rank = $taxallnomy_ranks_code{"code"}{$rankCode}{"abbrev"}."_";
+			my $rank = $ncbi_ranks{"code"}{$rankCode}{"abbrev"}."_";
 			my $code = $typeCode{$typeCode};
 			$nameDef = $rank.$code.$name3;
 		} else {
@@ -1543,9 +1445,9 @@ sub generate_taxallnomy {
 	my $m = 0;
 	my @lineageTaxAllnomy;
 	my %txidInTaxAllnomy;
-	for (my $i = 0; $i < scalar @ncbi_all_ranks; $i++){
-		if (exists $lineageExRank{$ncbi_all_ranks[$i]}){ # ranked taxon
-			$m = $lineageExRank{$ncbi_all_ranks[$i]};
+	for (my $i = 0; $i < scalar @rankOrder; $i++){
+		if (exists $lineageExRank{$rankOrder[$i]}){ # ranked taxon
+			$m = $lineageExRank{$rankOrder[$i]};
 			push (@lineageTaxAllnomy, $lineageEx{$m}{"name"});
 			$txidInTaxAllnomy{$lineageEx{$m}{"name"}} = 1;
 			#push (@lineageTaxAllnomyUnbalanced, $lineageEx{$m}{"name"}) if (!exists $lineageTaxAllnomyUnbalanced{$lineageEx{$m}{"name"}});
@@ -1558,7 +1460,7 @@ sub generate_taxallnomy {
 			while (exists($lineageEx{$l + 1}{"rank"})){
 				if ($lineageEx{$l + 1}{"rank"} ne "clade"){
 					# verify if the searching rank level is below the current rank level
-					if ($ncbi_all_ranks{$ncbi_all_ranks[$i]} < $ncbi_all_ranks{$lineageEx{$l + 1}{"rank"}}){
+					if ($ncbi_all_ranks{$rankOrder[$i]}{"level"} < $ncbi_all_ranks{$lineageEx{$l + 1}{"rank"}}{"level"}){
 						$append = 0.002;
 						$l++; # here
 						$control = 1;
@@ -1573,11 +1475,11 @@ sub generate_taxallnomy {
 						my $maxPossibleRanks = $possibleRanks[0];
 						my $minPossibleRanks = $possibleRanks[$#possibleRanks];
 						
-						if ($ncbi_all_ranks{$ncbi_all_ranks[$i]} >= $maxPossibleRanks and $ncbi_all_ranks{$ncbi_all_ranks[$i]} <= $minPossibleRanks){
+						if ($ncbi_all_ranks{$rankOrder[$i]}{"level"} >= $maxPossibleRanks and $ncbi_all_ranks{$rankOrder[$i]}{"level"} <= $minPossibleRanks){
 							$l++;
 							$control = 1;
 							last;
-						} elsif ($ncbi_all_ranks{$ncbi_all_ranks[$i]} < $maxPossibleRanks) {
+						} elsif ($ncbi_all_ranks{$rankOrder[$i]}{"level"} < $maxPossibleRanks) {
 							$control = 1;
 							$append = 0.002;
 							#print $lineageEx{$l + 1}{"name"}."\n";
@@ -1598,7 +1500,7 @@ sub generate_taxallnomy {
 			if (!$control){
 				$append = 0.003;
 			}
-			$append += $taxAllnomy_ranks{$ncbi_all_ranks[$i]};
+			$append += $ncbi_ranks{"name"}{$rankOrder[$i]}{"dcode"};
 			$append += $lineageEx{$l}{"name"};
 			
 			push (@lineageTaxAllnomy, $append);
@@ -1653,6 +1555,101 @@ sub checkUnclass {
 		$control = 0;
 	}
 	return $control;
+}
+
+sub rankOrder {
+
+	my @rankOrder = (
+		["superkingdom","spKin"],
+		["kingdom","Kin"],
+		["subkingdom","sbKin"],
+		["superphylum","spPhy"],
+		["phylum","Phy"],
+		["subphylum","sbPhy"],
+		["infraphylum","inPhy"],
+		["superclass","spCla"],
+		["class","Cla"],
+		["subclass","sbCla"],
+		["infraclass","inCla"],
+		["cohort","Coh"],
+		["subcohort","sbCoh"],
+		["superorder","spOrd"],
+		["order","Ord"],
+		["suborder","sbOrd"],
+		["infraorder","inOrd"],
+		["parvorder","prOrd"],
+		["superfamily","spFam"],
+		["family","Fam"],
+		["subfamily","sbFam"],
+		["tribe","Tri"],
+		["subtribe","sbTri"],
+		["genus","Gen"],
+		["subgenus","sbGen"],
+		["section","Sec"],
+		["subsection","sbSec"],
+		["series","Ser"],
+		["subseries","sbSer"],
+		["species group","Sgr"],
+		["species subgroup","sbSgr"],
+		["species","Spe"],
+		["forma specialis","Fsp"],
+		["subspecies","sbSpe"],
+		["varietas","Var"],
+		["subvariety","sbVar"],
+		["forma","For"],
+		["serogroup","Srg"],
+		["serotype","Srt"],
+		["strain","Str"],
+		["isolate","Iso"]
+	);
+	
+	my %ncbi_ranks;
+	
+	my $nRanks = scalar @rankOrder;
+	my $nRanksLength = length $nRanks;
+	my $format = "%0".$nRanksLength."d";
+	my @ranks;
+	
+	for(my $i = 0; $i < scalar @rankOrder; $i++){
+		push(@ranks, $rankOrder[$i][0]);
+		$ncbi_ranks{"level"}{$i} = $rankOrder[$i][0];
+		$ncbi_ranks{"name"}{$rankOrder[$i][0]}{"level"} = $i;
+		
+		my $rankLevel = $i + 1;
+		my $code = sprintf($format, $rankLevel);
+		$ncbi_ranks{"name"}{$rankOrder[$i][0]}{"code"} = $code;
+		$ncbi_ranks{"name"}{$rankOrder[$i][0]}{"abbrev"} = $rankOrder[$i][1];
+		$ncbi_ranks{"name"}{$rankOrder[$i][0]}{"dcode"} = $rankLevel/100; # taxAllnomy_ranks
+		$ncbi_ranks{"code"}{$code}{"abbrev"} = $rankOrder[$i][1];
+		$ncbi_ranks{"code"}{$code}{"rank"} = $rankOrder[$i][0];
+	}
+	
+	$ncbi_ranks{"order"} = \@ranks;
+	
+	# add "no rank" info
+	$ncbi_ranks{"level"}{-1} = "clade";
+	$ncbi_ranks{"name"}{"clade"}{"level"} = -1;
+	$ncbi_ranks{"name"}{"no rank"}{"level"} = -1;
+	
+	# add synonymus ranks
+	my @synonymus = (
+		["superdivision", "superphylum"],
+		["division", "phylum"],
+		["subdivision", "subphylum"],
+		["infradivision", "infraphylum"],
+		["special form", "forma specialis"],
+		["morph", "varietas"],
+		["form", "varietas"],
+		["pathogroup", "serogroup"],
+		["biotype", "serotype"],
+		["genotype", "serotype"],
+	);
+	
+	for(my $i = 0; $i < scalar @synonymus; $i++){
+		$ncbi_ranks{"name"}{$synonymus[$i][0]}{"level"} = $ncbi_ranks{"name"}{$synonymus[$i][1]}{"level"};
+	}
+
+	return (\%ncbi_ranks);
 }
 
 =head1 NAME
