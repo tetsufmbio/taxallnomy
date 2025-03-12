@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.7.0
+# Version 1.7.1
 
 ##############################################################################
 #                                                                            #
@@ -60,6 +60,11 @@
 # Modification specific to version 1.7.0                                     #
 # - This version uses the rank order provided by NCBI Taxonomy in the paper  #
 #   Schoch et al. (2020).                                                    #
+#                                                                            #
+#                                                                            #
+# v1.7.1                                                                     #
+# - Domain and Realm ranks included;                                         #
+# - Superkingdom rank excluded.                                              #
 #                                                                            #
 ##############################################################################
 
@@ -186,7 +191,7 @@ while(my $line = <TXID>){
 		$table[$line[0]][1] = $ncbi_all_ranks{$table[$line[0]][8]}{"level"}; # rank level
 	} else {
 		# new rank found;
-		print "NOTE: new rank found: ".$table[$line[0]][8]."\n";
+		print "NOTE: new rank found on txid".$line[0].": ".$line[2]."\n";
 		exit;
 	}
 	
@@ -374,28 +379,28 @@ while(scalar keys %{$inconsistence{"pair"}} > 0){
 		}
 
 		# correct count after checking inconsistence
-		#if (!$table[$tax2remove][9]){ # check if it is an unclassified taxon
-		#	delete $rankCount{"distinct"}{$table[$tax2remove][8]}{$tax2remove};
-		#	my $countLeaf = 0;
-		#	if ($table[$tax2remove][2]){
-		#		my @unclassNodes;
-		#		push(@unclassNodes, @{$table[$tax2remove][2]});
-		#		while (scalar @unclassNodes > 0){
-		#			my $node = shift @unclassNodes;
-		#			next if ($table[$node][9]);
-		#			if ($table[$node][2]){
-		#				push(@unclassNodes, @{$table[$node][2]});
-		#			} else {
-		#				$countLeaf++;
-		#			}
-		#		}
-		#		
-		#	} else {
-		#		$countLeaf++;
-		#	}
-		#	$rankCount{"all"}{$table[$tax2remove][8]} -= $countLeaf;
+		if (!$table[$tax2remove][9]){ # check if it is an unclassified taxon
+			delete $rankCount{"distinct"}{$table[$tax2remove][8]}{$tax2remove};
+			my $countLeaf = 0;
+			if ($table[$tax2remove][2]){
+				my @unclassNodes;
+				push(@unclassNodes, @{$table[$tax2remove][2]});
+				while (scalar @unclassNodes > 0){
+					my $node = shift @unclassNodes;
+					next if ($table[$node][9]);
+					if ($table[$node][2]){
+						push(@unclassNodes, @{$table[$node][2]});
+					} else {
+						$countLeaf++;
+					}
+				}
+				
+			} else {
+				$countLeaf++;
+			}
+			$rankCount{"all"}{$table[$tax2remove][8]} -= $countLeaf;
 			
-		#}
+		}
 		print "NOTE: ".$tax2remove." had its rank (".$table[$tax2remove][8].") set to clade to avoid inconsistence in the rank hierarchy.\n";
 		$table[$tax2remove][1] = -1;
 		$table[$tax2remove][8] = "clade";
@@ -1560,7 +1565,8 @@ sub checkUnclass {
 sub rankOrder {
 
 	my @rankOrder = (
-		["superkingdom","spKin"],
+		["domain","Dom"],
+		["realm","Rea"],
 		["kingdom","Kin"],
 		["subkingdom","sbKin"],
 		["superphylum","spPhy"],
