@@ -192,7 +192,7 @@ while(my $line = <TXID>){
 	} else {
 		# new rank found;
 		print "NOTE: new rank found on txid".$line[0].": ".$line[2]."\n";
-		exit;
+		exit 1;
 	}
 	
 	if (!$table[$line[1]][2]){
