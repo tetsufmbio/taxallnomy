@@ -1636,6 +1636,7 @@ sub rankOrder {
 	$ncbi_ranks{"level"}{-1} = "clade";
 	$ncbi_ranks{"name"}{"clade"}{"level"} = -1;
 	$ncbi_ranks{"name"}{"no rank"}{"level"} = -1;
+	$ncbi_ranks{"name"}{"no_rank"}{"level"} = -1;
 	
 	# add synonymus ranks
 	my @synonymus = (
