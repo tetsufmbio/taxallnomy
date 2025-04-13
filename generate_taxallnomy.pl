@@ -1637,9 +1637,11 @@ sub rankOrder {
 	$ncbi_ranks{"name"}{"clade"}{"level"} = -1;
 	$ncbi_ranks{"name"}{"no rank"}{"level"} = -1;
 	$ncbi_ranks{"name"}{"no_rank"}{"level"} = -1;
+	$ncbi_ranks{"name"}{"cellular root"}{"level"} = -1;
 	
 	# add synonymus ranks
 	my @synonymus = (
+		["acellular root", "domain"],
 		["superdivision", "superphylum"],
 		["division", "phylum"],
 		["subdivision", "subphylum"],
