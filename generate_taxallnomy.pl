@@ -32,7 +32,7 @@
 #                                                                            #
 ##############################################################################
 
-# Version 1.7.1
+# Version 1.7.2
 
 ##############################################################################
 #                                                                            #
@@ -66,6 +66,9 @@
 # - Domain and Realm ranks included;                                         #
 # - Superkingdom rank excluded.                                              #
 #                                                                            #
+# v1.7.2                                                                     #
+# - cellular and acelluar root ranks included;                               #
+#                                                                            #
 ##############################################################################
 
 use strict;
@@ -75,7 +78,7 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $dir = "taxallnomy_data";
-my $taxallnomy_version = "1.7.0";
+my $taxallnomy_version = "1.7.2";
 my $version;
 my $help;
 my $man;
